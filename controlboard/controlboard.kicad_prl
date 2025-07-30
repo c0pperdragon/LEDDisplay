@@ -1,6 +1,6 @@
 {
   "board": {
-    "active_layer": 1,
+    "active_layer": 0,
     "active_layer_preset": "",
     "auto_track_width": true,
     "hidden_netclasses": [],
@@ -42,6 +42,7 @@
       13,
       15,
       16,
+      17,
       18,
       19,
       20,
@@ -63,7 +64,7 @@
       39,
       40
     ],
-    "visible_layers": "fffff3f_ffffffff",
+    "visible_layers": "fffffff_ffffffff",
     "zone_display_mode": 0
   },
   "git": {
@@ -73,7 +74,7 @@
     "ssh_key": ""
   },
   "meta": {
-    "filename": "panel16x16.kicad_prl",
+    "filename": "controlboard.kicad_prl",
     "version": 3
   },
   "project": {
