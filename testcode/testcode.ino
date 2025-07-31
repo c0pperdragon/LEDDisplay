@@ -60,9 +60,10 @@ void showColor(int r, int g, int b)
   int row;
 
   // reset row counter
-  digitalWrite(PIN_CLK, LOW);
-  digitalWrite(PIN_LAT, LOW);  
-  digitalWrite(PIN_LAT, HIGH);
+  digitalWrite(PIN_OE, LOW);
+  digitalWrite(PIN_E, LOW);
+  digitalWrite(PIN_E, HIGH);
+  digitalWrite(PIN_OE, HIGH);
   digitalWrite(PIN_E, LOW);
   row=0;
 
@@ -84,13 +85,12 @@ void showColor(int r, int g, int b)
     digitalWrite(PIN_CLK, LOW);
     digitalWrite(PIN_CLK, HIGH);
   }
+  digitalWrite(PIN_LAT, LOW);
+  digitalWrite(PIN_LAT, HIGH);
 
   // progress vertical line
   for (i=0; i<150000; i++)
   {
-    // set highest line counter bit manually
-    digitalWrite(PIN_E, row>=16 ? HIGH:LOW);
-
     // turn on display line for short time
     digitalWrite(PIN_OE, LOW);
     delayMicroseconds(10);
@@ -98,8 +98,26 @@ void showColor(int r, int g, int b)
     delayMicroseconds(10);
 
     // progress counter register
-    digitalWrite(PIN_LAT, LOW);
-    digitalWrite(PIN_LAT, HIGH);
     row=(row+1) % 32;
+    if (row==0) 
+    {
+      digitalWrite(PIN_E, LOW);
+      digitalWrite(PIN_E, HIGH);
+      digitalWrite(PIN_E, LOW);
+    }
+    else if (row==16) 
+    {
+      digitalWrite(PIN_E, HIGH);
+    }
+    else if (row<16) 
+    {
+      digitalWrite(PIN_E, HIGH);
+      digitalWrite(PIN_E, LOW);
+    }
+    else
+    {
+      digitalWrite(PIN_E, LOW);
+      digitalWrite(PIN_E, HIGH);
+    }
   }
 }
