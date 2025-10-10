@@ -1,22 +1,21 @@
 // board: Raspberry Pi Pico
 
-#define PIN_G2 15
-#define PIN_G1 14
-#define PIN_R1 13
-#define PIN_B1 12
-#define PIN_R2 11
-#define PIN_B2 10
-#define PIN_OE  9
-#define PIN_E   8
-#define PIN_G4  7
-#define PIN_G3  6
-#define PIN_R3  5
-#define PIN_B3  4
-#define PIN_R4  3
-#define PIN_B4  2
-#define PIN_LAT 1
 #define PIN_CLK 0
-
+#define PIN_LAT 1
+#define PIN_E   2
+#define PIN_OE  3
+#define PIN_R1 13
+#define PIN_G1 14
+#define PIN_B1 15
+#define PIN_R2 10
+#define PIN_G2 11
+#define PIN_B2 12
+#define PIN_R3  7
+#define PIN_G3  8
+#define PIN_B3  9
+#define PIN_R4  4
+#define PIN_G4  5
+#define PIN_B4  6
 
 void setup() 
 {
@@ -45,16 +44,26 @@ void setup()
 
 void loop() 
 {
-  showColor(1,0,0);
-  showColor(0,1,0);
-  showColor(0,0,1);
-  showColor(1,1,0);
-  showColor(0,1,1);
-  showColor(1,0,1);
-  showColor(1,1,1);
+  showColor(0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0, 0,1,1, 1,0,1, 1,1,1);
+  showColor(1,1,1, 0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0, 0,1,1, 1,0,1);
+  showColor(1,0,1, 1,1,1, 0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0, 0,1,1);
+  showColor(0,1,1, 1,0,1, 1,1,1, 0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0);
+  showColor(1,1,0, 0,1,1, 1,0,1, 1,1,1, 0,0,0, 1,0,0, 0,1,0, 0,0,1);
+  showColor(0,0,1, 1,1,0, 0,1,1, 1,0,1, 1,1,1, 0,0,0, 1,0,0, 0,1,0);
+  showColor(0,1,0, 0,0,1, 1,1,0, 0,1,1, 1,0,1, 1,1,1, 0,0,0, 1,0,0);
+  showColor(1,0,0, 0,1,0, 0,0,1, 1,1,0, 0,1,1, 1,0,1, 1,1,1, 0,0,0);
 }
  
-void showColor(int r, int g, int b)
+void showColor(
+  int r0, int g0, int b0,
+  int r1, int g1, int b1,
+  int r2, int g2, int b2,
+  int r3, int g3, int b3,
+  int r4, int g4, int b4,
+  int r5, int g5, int b5,
+  int r6, int g6, int b6,
+  int r7, int g7, int b7
+)
 {
   long int i;
   int row;
@@ -68,19 +77,36 @@ void showColor(int r, int g, int b)
   row=0;
 
   // clock out pixels to use for all lines
-  digitalWrite(PIN_R1, r);
-  digitalWrite(PIN_R2, r);
-  digitalWrite(PIN_R3, r);
-  digitalWrite(PIN_R4, r);
-  digitalWrite(PIN_G1, g);
-  digitalWrite(PIN_G2, g);
-  digitalWrite(PIN_G3, g);
-  digitalWrite(PIN_G4, g);
-  digitalWrite(PIN_B1, b);
-  digitalWrite(PIN_B2, b);
-  digitalWrite(PIN_B3, b);
-  digitalWrite(PIN_B4, b);
-  for (i=0; i<64*10; i++)
+  digitalWrite(PIN_R1, r0);
+  digitalWrite(PIN_R2, r1);
+  digitalWrite(PIN_R3, r4);
+  digitalWrite(PIN_R4, r5);
+  digitalWrite(PIN_G1, g0);
+  digitalWrite(PIN_G2, g1);
+  digitalWrite(PIN_G3, g4);
+  digitalWrite(PIN_G4, g5);
+  digitalWrite(PIN_B1, b0);
+  digitalWrite(PIN_B2, b1);
+  digitalWrite(PIN_B3, b4);
+  digitalWrite(PIN_B4, b5);
+  for (i=0; i<64*5; i++)
+  {
+    digitalWrite(PIN_CLK, LOW);
+    digitalWrite(PIN_CLK, HIGH);
+  }
+  digitalWrite(PIN_R1, r2);
+  digitalWrite(PIN_R2, r3);
+  digitalWrite(PIN_R3, r6);
+  digitalWrite(PIN_R4, r7);
+  digitalWrite(PIN_G1, g2);
+  digitalWrite(PIN_G2, g3);
+  digitalWrite(PIN_G3, g6);
+  digitalWrite(PIN_G4, g7);
+  digitalWrite(PIN_B1, b2);
+  digitalWrite(PIN_B2, b3);
+  digitalWrite(PIN_B3, b6);
+  digitalWrite(PIN_B4, b7);
+  for (i=0; i<64*5; i++)
   {
     digitalWrite(PIN_CLK, LOW);
     digitalWrite(PIN_CLK, HIGH);

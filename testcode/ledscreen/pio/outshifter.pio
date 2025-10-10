@@ -1,0 +1,39 @@
+.program outshifter
+.side_set 1 opt
+.wrap_target	
+    pull block
+
+    NOP side 0
+    out pins 12
+    out null 4 side 1
+    NOP side 0
+    out pins 12
+    out null 4 side 1
+.wrap
+
+
+% c-sdk {
+
+#include "hardware/clocks.h"
+#include "hardware/gpio.h"
+
+
+static inline void outshifter_program_init(PIO pio, uint sm, uint offset, uint pins, uint clkpin )
+
+{	
+		
+	pio_sm_config c = outshifter_program_get_default_config(offset);
+  
+
+  	pio_sm_set_consecutive_pindirs(pio, sm, pins, 3, true);	
+
+	sm_config_set_out_pins(&c, pins, 12); // rgb1, rgb2
+    sm_config_set_sideset_pins(&c, clkpin); // clkpin
+		
+	sm_config_set_clkdiv(&c, 1.0);
+
+	pio_sm_init(pio, sm, offset, &c);
+	pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
