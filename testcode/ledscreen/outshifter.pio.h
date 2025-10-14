@@ -13,30 +13,30 @@
 // ---------- //
 
 #define outshifter_wrap_target 0
-#define outshifter_wrap 6
-#define outshifter_pio_version 0
+#define outshifter_wrap 11
 
 static const uint16_t outshifter_program_instructions[] = {
             //     .wrap_target
-    0x80a0, //  0: pull   block
-    0xb042, //  1: nop                    side 0
-    0x600c, //  2: out    pins, 12
-    0x7864, //  3: out    null, 4         side 1
-    0xb042, //  4: nop                    side 0
-    0x600c, //  5: out    pins, 12
-    0x7864, //  6: out    null, 4         side 1
+    0x90a0, //  0: pull   block           side 0     
+    0x600c, //  1: out    pins, 12                   
+    0xa042, //  2: nop                               
+    0x6064, //  3: out    null, 4                    
+    0xb842, //  4: nop                    side 1     
+    0xa042, //  5: nop                               
+    0xb042, //  6: nop                    side 0     
+    0x600c, //  7: out    pins, 12                   
+    0xa042, //  8: nop                               
+    0x6064, //  9: out    null, 4                    
+    0xb842, // 10: nop                    side 1     
+    0xa042, // 11: nop                               
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program outshifter_program = {
     .instructions = outshifter_program_instructions,
-    .length = 7,
+    .length = 12,
     .origin = -1,
-//    .pio_version = outshifter_pio_version,
-#if PICO_PIO_VERSION > 0
-    .used_gpio_ranges = 0x0
-#endif
 };
 
 static inline pio_sm_config outshifter_program_get_default_config(uint offset) {
@@ -49,9 +49,12 @@ static inline pio_sm_config outshifter_program_get_default_config(uint offset) {
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 static inline void outshifter_program_init(PIO pio, uint sm, uint offset, uint pins, uint clkpin )
-{	
+{			
 	pio_sm_config c = outshifter_program_get_default_config(offset);
-  	pio_sm_set_consecutive_pindirs(pio, sm, pins, 3, true);	
+    pio_gpio_init(pio, clkpin);
+    for (int i=0;i<12;i++) pio_gpio_init(pio, pins+i);
+    pio_sm_set_consecutive_pindirs(pio, sm, clkpin, 1, true);	
+  	pio_sm_set_consecutive_pindirs(pio, sm, pins, 12, true);	
 	sm_config_set_out_pins(&c, pins, 12); // rgb1, rgb2
     sm_config_set_sideset_pins(&c, clkpin); // clkpin
 	sm_config_set_clkdiv(&c, 1.0);
@@ -60,4 +63,3 @@ static inline void outshifter_program_init(PIO pio, uint sm, uint offset, uint p
 }
 
 #endif
-
