@@ -14,27 +14,3 @@
     nop         side 1 
     nop         
 .wrap
-
-
-% c-sdk {
-
-#include "hardware/clocks.h"
-#include "hardware/gpio.h"
-
-
-static inline void outshifter_program_init(PIO pio, uint sm, uint offset, uint pins, uint clkpin )
-
-{			
-	pio_sm_config c = outshifter_program_get_default_config(offset);
-    pio_gpio_init(pio, clkpin);
-    for (int i=0;i<12;i++) pio_gpio_init(pio, pins+i);
-    pio_sm_set_consecutive_pindirs(pio, sm, clkpin, 1, true);	
-  	pio_sm_set_consecutive_pindirs(pio, sm, pins, 12, true);	
-	sm_config_set_out_pins(&c, pins, 12); // rgb1, rgb2
-    sm_config_set_sideset_pins(&c, clkpin); // clkpin
-	sm_config_set_clkdiv(&c, 1.0);
-	pio_sm_init(pio, sm, offset, &c);
-	pio_sm_set_enabled(pio, sm, true);
-}
-
-%}

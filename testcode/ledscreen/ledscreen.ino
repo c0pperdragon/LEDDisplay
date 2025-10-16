@@ -3,13 +3,15 @@
 #include "hardware/spi.h"
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
+#include "hardware/pio.h"
+#define PICO_NO_HARDWARE 0
 #include "outshifter.pio.h"
 #include "image.h"
 
 #define SCREENBUFFER_LEN        (64 * 64 * 20 / 2)   // 1/2 int32 pro pixel anstatt 12 bit, da der DMA nur 8/16/32 Bit übertragen kann
 #define SHIFTBLOCK_LEN          (64 * 10 / 2)        // 1/2 int32 * number of shifts
 
-#define ROW_TIMING           33 // microseconds per output block
+#define ROW_TIMING           40 // microseconds per output block
 #define ONTIME_BIT3          32
 #define ONTIME_BIT2          16
 #define ONTIME_BIT1          8
@@ -111,6 +113,20 @@ void drawDemoImage() {
   */
 }
 
+static inline void outshifter_program_init(PIO pio, uint sm, uint offset, uint pins, uint clkpin )
+{
+ 	pio_sm_config c = outshifter_program_get_default_config(offset);
+  pio_gpio_init(pio, clkpin);
+  for (int i=0;i<12;i++) pio_gpio_init(pio, pins+i);
+  pio_sm_set_consecutive_pindirs(pio, sm, clkpin, 1, true);	
+	pio_sm_set_consecutive_pindirs(pio, sm, pins, 12, true);	
+	sm_config_set_out_pins(&c, pins, 12); // rgb1, rgb2
+  sm_config_set_sideset_pins(&c, clkpin); // clkpin
+	sm_config_set_clkdiv(&c, 1.0);
+	pio_sm_init(pio, sm, offset, &c);
+	pio_sm_set_enabled(pio, sm, true);
+}
+
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -146,10 +162,11 @@ void setup() {
     &c,
     &pioout->txf[0],    // Write address (only need to set this once)
     NULL,               // Don't provide a read address yet
-    SHIFTBLOCK_LEN,
+    SHIFTBLOCK_LEN+1,
     false               // Don't start yet
   );
-
+  
+  noInterrupts();
 }
 
 void loop() {  
@@ -174,7 +191,7 @@ void loop() {
   for (row=0; row<32; row++) 
   for (colorbit=3; colorbit>=0; colorbit--) {
       //Start dma to output the current line of pixels
-      dma_channel_set_read_addr(out_dma_chan, screenbuffer + SHIFTBLOCK_LEN*(colorbit+row*4), true);
+      dma_channel_set_read_addr(out_dma_chan, screenbuffer-1 + SHIFTBLOCK_LEN*(colorbit+row*4), true);
 
       // finish displaying the previous pixels
       while ( time_us_64() < stopTime );  
