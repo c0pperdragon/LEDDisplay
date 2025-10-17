@@ -13,36 +13,41 @@
 // ---------- //
 
 #define outshifter_wrap_target 0
-#define outshifter_wrap 11
+#define outshifter_wrap 16
 
 static const uint16_t outshifter_program_instructions[] = {
             //     .wrap_target
-    0x90a0, //  0: pull   block           side 0     
-    0x600c, //  1: out    pins, 12                   
-    0xa042, //  2: nop                               
-    0x6064, //  3: out    null, 4                    
-    0xb842, //  4: nop                    side 1     
-    0xa042, //  5: nop                               
-    0xb042, //  6: nop                    side 0     
-    0x600c, //  7: out    pins, 12                   
-    0xa042, //  8: nop                               
-    0x6064, //  9: out    null, 4                    
-    0xb842, // 10: nop                    side 1     
-    0xa042, // 11: nop                               
+    0xe033, //  0: set    x, 19           side 0     
+    0xa0c1, //  1: mov    isr, x          side 0     
+    0xe02f, //  2: set    x, 15           side 0     
+    0x4024, //  3: in     x, 4            side 0     
+    0x2091, //  4: wait   1 gpio, 17      side 0     
+    0x8080, //  5: pull   noblock         side 0     
+    0xe043, //  6: set    y, 3            side 0     
+    0xa026, //  7: mov    x, isr          side 0     
+    0x6004, //  8: out    pins, 4         side 0     
+    0x80c0, //  9: pull   ifempty noblock side 0     
+    0xa042, // 10: nop                    side 0     
+    0xa842, // 11: nop                    side 1     
+    0xa842, // 12: nop                    side 1     
+    0x0048, // 13: jmp    x--, 8          side 0     
+    0xb042, // 14: nop                    side 2     
+    0x1087, // 15: jmp    y--, 7          side 2     
+    0x0004, // 16: jmp    4               side 0     
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program outshifter_program = {
     .instructions = outshifter_program_instructions,
-    .length = 12,
+    .length = 17,
     .origin = -1,
 };
 
 static inline pio_sm_config outshifter_program_get_default_config(uint offset) {
     pio_sm_config c = pio_get_default_sm_config();
     sm_config_set_wrap(&c, offset + outshifter_wrap_target, offset + outshifter_wrap);
-    sm_config_set_sideset(&c, 2, true, false);
+    sm_config_set_sideset(&c, 2, false, false);
     return c;
 }
 #endif

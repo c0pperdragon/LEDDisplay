@@ -1,16 +1,34 @@
+; shifting out 320 pixels with 4 bits on r,g,b each. 
+; first all most siginficant bits are shifted and latched,
+; then the progressively less significant bits, until all 4 bits were
+; transported. 
+; turning visiblity on/off for the correct amount of time is
+; handled elsewere (CPU, most likely), the whole process is triggered by interrupt,
+; so many state machines can be prepared and started in parallel to shift out multiple 
+; lines at the same time
+
 .program outshifter
-.side_set 1 opt
-.wrap_target	
-    pull block  side 0
-    out pins 12 
-    NOP         
-    out null 4  
-    NOP         side 1
-    NOP         
-    nop         side 0
-    out pins 12 
-    nop         
-    out null 4  
-    nop         side 1 
-    nop         
-.wrap
+.side_set 2                            ; bit 0: clock, bit 1: latch
+    set x 0x13                side 0   ; construct number 319 = $13F in ISR
+	mov isr x                 side 0   ; to make this work, need to set direction to left
+	set x 0xf                 side 0   ; 
+	in x 4                    side 0
+
+nextline:
+	wait 1 gpio 17            side 0   ; wait for start signal (until data is ready)
+    pull noblock              side 0   ; initial pull from fresh data
+	
+ 	set y 3                   side 0   ; send total of 4 bit planes
+sendplane:	
+	mov x isr                 side 0   ; about 1922 clocks (15,376 us) per plane
+sendbit: 
+    out pins 4                side 0
+	pull ifempty noblock      side 0
+    nop                       side 0
+    nop	                      side 1
+	nop                       side 1
+    jmp	x-- sendbit           side 0
+	nop                       side 2
+    jmp y-- sendplane         side 2
+	
+    jmp nextline              side 0
