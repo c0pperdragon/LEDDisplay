@@ -1,0 +1,27 @@
+; waits until being notified by the shifter that one block of
+; bits was shifted and is ready to be shown. this program then
+; turns on the OE pin for the necessary time (depending on significance of the bit)
+
+.program lightswitcher
+.side_set 1                            ; bit 0: OE
+    set x 0x7                 side 1   ; construct number 119 = $77 in ISR
+	mov isr x                 side 1   ; to make this work, need to set direction to left
+	in x 4                    side 1
+.wrap_target
+    mov x isr                 side 1
+	wait 1 irq 4              side 1   ; wait for bit 3 
+showbit3:
+	jmp x-- showbit3   [15]   side 0   ; assert OE for 120*16=1920 clocks
+    mov x isr                 side 1
+	wait 1 irq 4              side 1   ; wait for bit 2
+showbit2:
+	jmp x-- showbit2   [7]    side 0   ; assert OE for 120*8=960 clocks
+    mov x isr                 side 1
+	wait 1 irq 4              side 1   ; wait for bit 1
+showbit1:
+	jmp x-- showbit1   [3]    side 0   ; assert OE for 120*4=480 clocks
+    mov x isr                 side 1   
+	wait 1 irq 4              side 1   ; wait for bit 0
+showbit0:
+	jmp x-- showbit0   [1]    side 0   ; assert OE for 120*2=240 clocks
+.wrap

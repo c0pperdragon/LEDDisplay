@@ -6,36 +6,23 @@
 #include "hardware/pio.h"
 #define PICO_NO_HARDWARE 0
 #include "outshifter.pio.h"
+#include "lightswitcher.pio.h"
 #include "image.h"
-
-#define SCANLINE_LEN            ((320/8) * 4)       // scanline data in int32 units
-#define SCREENBUFFER_LEN        (256*SCANLINE_LEN)   // whole screen
-
-#define SCANLINE_TIMING         65 
-#define ONTIME_BIT3             16
-#define ONTIME_BIT2             33
-#define ONTIME_BIT1             48
-#define ONTIME_BIT0             62
-#define OFFTIME_BIT3            (ONTIME_BIT3+15)
-#define OFFTIME_BIT2            (ONTIME_BIT2+8)
-#define OFFTIME_BIT1            (ONTIME_BIT1+4)
-#define OFFTIME_BIT0            (ONTIME_BIT0+2)
 
 #define PIN_CLK 0
 #define PIN_LAT 1
 #define PIN_E 2
 #define PIN_OE 3
-#define PIN_RGB1 13  //Pins GPIO13 - GPIO15
-#define PIN_RGB2 10  //Pins GPI10 - GPIO12
-#define PIN_RGB3 7   //Pins GPI7 - GPIO9
-#define PIN_RGB4 4   //Pins GPIO4 - GPIO6
+#define PIN_RGB 4   //Pins GPIO4 - GPIO15
 
-uint32_t  screenbuffer[SCREENBUFFER_LEN];
+#define SCREENBUFFER_LEN        ((320/2)*4*32)   // screen buffer size in uint32
+#define SCANLINE_TIMING         65
 
 PIO pioout;       //pioblock for outputshifter
-int sm0;          //statemachine for outputshifter
-int out_dma_chan; //dma for outputshifter
+int sm0,sm1;      //statemachines for outputshifter
+int out_dma;      //dma for outputshifter
 
+uint32_t  screenbuffer[SCREENBUFFER_LEN];
 
 void clearScreen() {
   memset( screenbuffer, 0, sizeof(screenbuffer) );
@@ -45,10 +32,10 @@ void writePixel(int x, int y, int r, int g, int b) {
   uint32_t shift;
   uint32_t offs;
 
-  if (x<0 || y<0 || x>=320 || y>=256) { return; }
+  if (x<0 || y<0 || x>=320 || y>=128) { return; }
 
-  shift = 28 - (x % 8) * 4;
-  offs = x/8 + y*SCANLINE_LEN;
+  shift = ((x % 2) ? 25 : 9) - (y/32)*3;
+  offs = x/2 + (y%32)*(SCREENBUFFER_LEN/32);
 
   for (int i=3; i>=0; i--) {
     screenbuffer[offs] |= ( 
@@ -56,13 +43,12 @@ void writePixel(int x, int y, int r, int g, int b) {
       (((g>>i) & 0x01) << (shift+1)) |
       (((b>>i) & 0x01) << (shift+2)) 
     );
-    offs += (SCANLINE_LEN/4);
+    offs += (SCREENBUFFER_LEN/32)/4;
   }
 }
 
 void drawDemoImage() {
   clearScreen();
-
 
   int imgoffs = 0;  
   for (int y=0; y<256;y++) {
@@ -75,7 +61,7 @@ void drawDemoImage() {
       int g = ((rgb & 0x0000F000) >> 12);
       int b = ((rgb & 0x000000F0) >> 4);
 
-      writePixel(x,y, r,g,b);
+      writePixel(x,y-70, r,g,b);
     }
   }
 
@@ -97,98 +83,96 @@ void drawDemoImage() {
   */
 }
 
-static inline void outshifter_program_init(PIO pio, uint sm, uint pins, uint clkpin, uint latchpin )
-{
-  int offset = pio_add_program(pio, &outshifter_program);
- 	pio_sm_config c = outshifter_program_get_default_config(offset);
-  pio_gpio_init(pio, clkpin);
-  pio_gpio_init(pio, latchpin);
-  for (int i=0;i<3;i++) pio_gpio_init(pio, pins+i);
-  pio_sm_set_consecutive_pindirs(pio, sm, clkpin, 2, true);	
-	pio_sm_set_consecutive_pindirs(pio, sm, pins, 3, true);	
-	sm_config_set_out_pins(&c, pins, 3); // rgb1, rgb2
-  sm_config_set_sideset_pins(&c, clkpin); // clkpin, latch
-	sm_config_set_clkdiv(&c, 1.0);
-  sm_config_set_in_shift(&c, false, false, 0);
-  sm_config_set_out_shift(&c, false, false, 32);
-	pio_sm_init(pio, sm, offset, &c);
-	pio_sm_set_enabled(pio, sm, true);
-}
-
-static inline void waituntil(uint64_t t)
-{
-      while ( time_us_64() < t );  
-}
-
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite( LED_BUILTIN, HIGH);
-
   pinMode(PIN_OE, OUTPUT);
   pinMode(PIN_E, OUTPUT);
-  pinMode(16, OUTPUT);
-  pinMode(17, INPUT);
-
-  // set control pins to idle states
-  digitalWrite(PIN_OE, HIGH);
-  digitalWrite(PIN_E, LOW);
-  digitalWrite(16, LOW);
-
-  //Prepare screenbuffer with Demoimage from image.h
-  drawDemoImage();
-  
-  //Setup pio
-  pioout = pio0;
-  sm0 = pio_claim_unused_sm(pioout, true);
-  outshifter_program_init(pioout, sm0, PIN_RGB4, PIN_CLK, PIN_LAT);
-
-  //Setup dma
-  out_dma_chan = dma_claim_unused_channel(true);
-  dma_channel_config c = dma_channel_get_default_config(out_dma_chan);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-  channel_config_set_read_increment(&c, true);
-  channel_config_set_dreq(&c, DREQ_PIO0_TX0);
-
-  dma_channel_configure(
-    out_dma_chan,
-    &c,
-    &pioout->txf[0],    // Write address (only need to set this once)
-    NULL,               // Don't provide a read address yet
-    SCANLINE_LEN,
-    false               // Don't start yet
-  );
-  
-  noInterrupts();
-}
-
-void loop() {  
-  uint64_t startTime = time_us_64() + 1;
-  int row;
 
   // initialize the row counter for correct startup in state 31
   digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, LOW);
   digitalWrite(PIN_E, HIGH);
   digitalWrite(PIN_OE, HIGH);
-  for (row=0; row<15; row++)
+  for (int row=0; row<15; row++)
   {
     digitalWrite(PIN_E, LOW);
     digitalWrite(PIN_E, HIGH);
   }
+  // set control pins to idle states
+  digitalWrite(PIN_OE, HIGH);
+  digitalWrite(PIN_E, LOW);
+  digitalWrite( LED_BUILTIN, HIGH);
+
+  //Setup pio block and state machines
+  pioout = pio0;
+  pio_gpio_init(pioout, PIN_CLK);
+  pio_gpio_init(pioout, PIN_LAT);
+  pio_gpio_init(pioout, PIN_OE);
+  for (int i=0;i<12;i++) { pio_gpio_init(pioout, PIN_RGB+i); }
+  
+  sm0 = pio_claim_unused_sm(pioout, true);
+  {
+    int o = pio_add_program(pioout, &outshifter_program);
+    pio_sm_config c = outshifter_program_get_default_config(o);
+    sm_config_set_out_pins(&c, PIN_RGB, 12);
+    sm_config_set_sideset_pins(&c, PIN_CLK);
+    sm_config_set_clkdiv(&c, 1.0);
+    sm_config_set_in_shift(&c, false, false, 0);
+    sm_config_set_out_shift(&c, false, false, 32);
+    pio_sm_set_consecutive_pindirs(pioout, sm0, PIN_CLK, 2, true);
+	  pio_sm_set_consecutive_pindirs(pioout, sm0, PIN_RGB, 12, true);	
+    pio_sm_init(pioout, sm0, o, &c);
+	  pio_sm_set_enabled(pioout, sm0, true);
+  }
+  sm1 = pio_claim_unused_sm(pioout, true);
+  {
+    int o = pio_add_program(pioout, &lightswitcher_program);
+    pio_sm_config c = lightswitcher_program_get_default_config(o);
+    sm_config_set_sideset_pins(&c, PIN_OE);
+    sm_config_set_clkdiv(&c, 1.0);
+    sm_config_set_in_shift(&c, false, false, 0);
+    sm_config_set_out_shift(&c, false, false, 0);
+    pio_sm_set_consecutive_pindirs(pioout, sm1, PIN_OE, 1, true);
+    pio_sm_init(pioout, sm1, o, &c);
+	  pio_sm_set_enabled(pioout, sm1, true);
+  }
+  //Setup dma channel
+  out_dma = dma_claim_unused_channel(true);
+  {
+    dma_channel_config c = dma_channel_get_default_config(out_dma);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_dreq(&c, DREQ_PIO0_TX0);
+    dma_channel_configure(
+      out_dma,
+      &c,
+      &pioout->txf[0],     // Write address (only need to set this once)
+      NULL,                // Don't provide a read address yet
+      SCREENBUFFER_LEN/32, // always write 1 of 32 lines in each segment
+      false                // Don't start yet
+    );
+  }
+
+  //Prepare screenbuffer with Demoimage from image.h
+  drawDemoImage();
+
+//  noInterrupts();
+}
+
+void loop() {  
+  uint64_t startTime = time_us_64() + 1;
+  int row;
  
   // display picture forever
   for (;;)
   for (row=0; row<32; row++) {
-      waituntil(startTime);
-
-      //Start dma to output the current line of pixels
-      dma_channel_set_read_addr(out_dma_chan, screenbuffer+SCANLINE_LEN*(70+row), true);
-      // Trigger interrupt to continue state machines
-      digitalWrite( 16, HIGH);
-      digitalWrite( 16, LOW);
-//      hw_set_bits(&(pioout->irq_force), 0xff);
-
-      // progress row selectors before showing most significant bit of this row
+      // start of all row processing 
+      while(time_us_64() < startTime);
+      // Start dma to output the current line of pixels
+      dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*row, true);
+      // in case previous data was still visible, wait for this
+      while(time_us_64() < startTime+8);
+      // progress row selectors before most significant bit of this row is shown
       if (row==0) {
           digitalWrite(PIN_E, LOW);
           digitalWrite(PIN_E, HIGH);
@@ -202,28 +186,6 @@ void loop() {
           digitalWrite(PIN_E, LOW);
           digitalWrite(PIN_E, HIGH);
       }
-
-      // turn total light on/off for all 4 bits
-      waituntil(startTime + ONTIME_BIT3);
-      digitalWrite(PIN_OE, LOW);
-      waituntil(startTime + OFFTIME_BIT3);
-      digitalWrite(PIN_OE, HIGH);
-
-      waituntil(startTime + ONTIME_BIT2);
-      digitalWrite(PIN_OE, LOW);
-      waituntil(startTime + OFFTIME_BIT2);
-      digitalWrite(PIN_OE, HIGH);
-
-      waituntil(startTime + ONTIME_BIT1);
-      digitalWrite(PIN_OE, LOW);
-      waituntil(startTime + OFFTIME_BIT1);
-      digitalWrite(PIN_OE, HIGH);
-
-      waituntil(startTime + ONTIME_BIT0);
-      digitalWrite(PIN_OE, LOW);
-      waituntil(startTime + OFFTIME_BIT0);
-      digitalWrite(PIN_OE, HIGH);
-
       // compute timing for next line
       startTime = startTime + SCANLINE_TIMING;
   }
