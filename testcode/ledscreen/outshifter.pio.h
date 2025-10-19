@@ -13,7 +13,7 @@
 // ---------- //
 
 #define outshifter_wrap_target 4
-#define outshifter_wrap 13
+#define outshifter_wrap 14
 
 static const uint16_t outshifter_program_instructions[] = {
     0xe033, //  0: set    x, 19           side 0     
@@ -25,19 +25,20 @@ static const uint16_t outshifter_program_instructions[] = {
     0x80a0, //  5: pull   block           side 0     
     0xe043, //  6: set    y, 3            side 0     
     0xa026, //  7: mov    x, isr          side 0     
-    0x6010, //  8: out    pins, 16        side 0     
-    0x81c0, //  9: pull   ifempty noblock side 0 [1] 
-    0xa942, // 10: nop                    side 1 [1] 
+    0x6110, //  8: out    pins, 16        side 0 [1] 
+    0x82c0, //  9: pull   ifempty noblock side 0 [2] 
+    0xaa42, // 10: nop                    side 1 [2] 
     0x0048, // 11: jmp    x--, 8          side 0     
-    0xc004, // 12: irq    nowait 4        side 0     
-    0x1187, // 13: jmp    y--, 7          side 2 [1] 
+    0xa742, // 12: nop                    side 0 [7] 
+    0xd704, // 13: irq    nowait 4        side 2 [7] 
+    0x0787, // 14: jmp    y--, 7          side 0 [7] 
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program outshifter_program = {
     .instructions = outshifter_program_instructions,
-    .length = 14,
+    .length = 15,
     .origin = -1,
 };
 

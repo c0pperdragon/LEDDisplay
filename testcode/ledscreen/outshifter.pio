@@ -16,11 +16,11 @@
 sendplane:	
 	mov x isr                 side 0   ; send 320 pixel (times 4) per plane
 sendbits: 
-    out pins 16               side 0
-	pull ifempty noblock  [1] side 0
-    nop	                  [1] side 1   ; clock for pixel
+    out pins 16           [1] side 0
+	pull ifempty noblock  [2] side 0
+    nop	                  [2] side 1   ; clock for pixel
     jmp	x-- sendbits          side 0
-	irq 4                     side 0   ; notify partner state machine
-    jmp y-- sendplane     [1] side 2   ; latch data and continue with next plane
+	nop                   [7] side 0
+	irq 4                 [7] side 2   ; latch data and notify partner state machine
+    jmp y-- sendplane     [7] side 0   ; continue with next plane
 .wrap
-

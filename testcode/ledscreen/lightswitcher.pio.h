@@ -12,33 +12,34 @@
 // lightswitcher //
 // ------------- //
 
-#define lightswitcher_wrap_target 3
-#define lightswitcher_wrap 14
+#define lightswitcher_wrap_target 4
+#define lightswitcher_wrap 15
 
 static const uint16_t lightswitcher_program_instructions[] = {
-    0xf027, //  0: set    x, 7            side 1     
+    0xf02b, //  0: set    x, 11           side 1     
     0xb0c1, //  1: mov    isr, x          side 1     
-    0x5024, //  2: in     x, 4            side 1     
+    0xf023, //  2: set    x, 3            side 1     
+    0x5024, //  3: in     x, 4            side 1     
             //     .wrap_target
-    0xb026, //  3: mov    x, isr          side 1     
-    0x30c4, //  4: wait   1 irq, 4        side 1     
-    0x0f45, //  5: jmp    x--, 5          side 0 [15]
-    0xb026, //  6: mov    x, isr          side 1     
-    0x30c4, //  7: wait   1 irq, 4        side 1     
-    0x0748, //  8: jmp    x--, 8          side 0 [7] 
-    0xb026, //  9: mov    x, isr          side 1     
-    0x30c4, // 10: wait   1 irq, 4        side 1     
-    0x034b, // 11: jmp    x--, 11         side 0 [3] 
-    0xb026, // 12: mov    x, isr          side 1     
-    0x30c4, // 13: wait   1 irq, 4        side 1     
-    0x014e, // 14: jmp    x--, 14         side 0 [1] 
+    0xb026, //  4: mov    x, isr          side 1     
+    0x30c4, //  5: wait   1 irq, 4        side 1     
+    0x0f46, //  6: jmp    x--, 6          side 0 [15]
+    0xb026, //  7: mov    x, isr          side 1     
+    0x30c4, //  8: wait   1 irq, 4        side 1     
+    0x0749, //  9: jmp    x--, 9          side 0 [7] 
+    0xb026, // 10: mov    x, isr          side 1     
+    0x30c4, // 11: wait   1 irq, 4        side 1     
+    0x034c, // 12: jmp    x--, 12         side 0 [3] 
+    0xb026, // 13: mov    x, isr          side 1     
+    0x30c4, // 14: wait   1 irq, 4        side 1     
+    0x014f, // 15: jmp    x--, 15         side 0 [1] 
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program lightswitcher_program = {
     .instructions = lightswitcher_program_instructions,
-    .length = 15,
+    .length = 16,
     .origin = -1,
 };
 

@@ -4,8 +4,9 @@
 
 .program lightswitcher
 .side_set 1                            ; bit 0: OE
-    set x 0x7                 side 1   ; construct number 119 = $77 in ISR
+    set x 0xb                 side 1   ; construct number 179 = $B3 in ISR
 	mov isr x                 side 1   ; to make this work, need to set direction to left
+    set x 0x3                 side 1
 	in x 4                    side 1
 .wrap_target
     mov x isr                 side 1

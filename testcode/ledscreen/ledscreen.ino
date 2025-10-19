@@ -1,3 +1,6 @@
+// Needs to run with 200Mhz to have necessary performance.
+// Use highest optimization level, tool
+
 #include "hardware/timer.h"
 #include "hardware/dma.h"
 #include "hardware/spi.h"
@@ -22,68 +25,103 @@ PIO pioout;       //pioblock for outputshifter
 int sm0,sm1;      //statemachines for outputshifter
 int out_dma;      //dma for outputshifter
 
-uint32_t  screenbuffer[SCREENBUFFER_LEN];
+uint32_t screenbuffer[SCREENBUFFER_LEN];
 
-void clearScreen() {
-  memset( screenbuffer, 0, sizeof(screenbuffer) );
+void distributeLineData(int line, uint32_t* data)
+{
+  int shift = 9 - (line/32) * 3;
+  uint32_t use_mask = 0x00070007u<<shift;
+  uint32_t cut_mask = ~use_mask;
+  uint32_t* outbuf3 = screenbuffer + (line%32) * (SCREENBUFFER_LEN/32);
+  uint32_t* outbuf2 = outbuf3 + 160;
+  uint32_t* outbuf1 = outbuf2 + 160;
+  uint32_t* outbuf0 = outbuf1 + 160;
+  int i=160;
+  do  // hand-crafted code to mimic cortex m0 assembly
+  {
+    uint32_t d = *data;
+    uint32_t x,y; 
+    data++;
+    x = *outbuf3;        // bit 3
+    x = x & cut_mask;
+    y = d>>9;
+    y = y<<shift;
+    y = y & use_mask;
+    x = x | y;
+    *outbuf3 = x;
+    outbuf3++;
+    x = *outbuf2;        // bit 2
+    x = x & cut_mask;
+    y = d>>6;
+    y = y<<shift;
+    y = y & use_mask;
+    x = x | y;
+    *outbuf2 = x;
+    outbuf2++;
+    x = *outbuf1;        // bit 1
+    x = x & cut_mask;
+    y = d>>3;
+    y = y<<shift;
+    y = y & use_mask;
+    x = x | y;
+    *outbuf1 = x;
+    outbuf1++;
+    x = *outbuf0;        // bit 0
+    x = x & cut_mask;
+    y = y<<shift;
+    y = y & use_mask;
+    x = x | y;
+    *outbuf0 = x;
+    outbuf0++;
+    i--;
+  } 
+  while (i);
 }
 
-void writePixel(int x, int y, int r, int g, int b) {
-  uint32_t shift;
-  uint32_t offs;
+// extract demo picture into screen buffer
+void drawDemoImage() 
+{
+  digitalWrite(16,LOW);
+  pinMode(16,OUTPUT); 
+  digitalWrite(16,LOW);
 
-  if (x<0 || y<0 || x>=320 || y>=128) { return; }
+  int imgoffs=320*70;
+  memset( screenbuffer, 0x47c3a230, sizeof(screenbuffer) );  // fill with some nonsense
 
-  shift = ((x % 2) ? 25 : 9) - (y/32)*3;
-  offs = x/2 + (y%32)*(SCREENBUFFER_LEN/32);
-
-  for (int i=3; i>=0; i--) {
-    screenbuffer[offs] |= ( 
-      (((r>>i) & 0x01) << (shift+0)) |
-      (((g>>i) & 0x01) << (shift+1)) |
-      (((b>>i) & 0x01) << (shift+2)) 
-    );
-    offs += (SCREENBUFFER_LEN/32)/4;
-  }
-}
-
-void drawDemoImage() {
-  clearScreen();
-
-  int imgoffs = 0;  
-  for (int y=0; y<256;y++) {
-    for (int x=0; x<320;x++) {
-
-      uint32_t rgb = image[imgoffs];      
-      imgoffs++;
-
-      int r = ((rgb & 0x00F00000) >> 20);
-      int g = ((rgb & 0x0000F000) >> 12);
-      int b = ((rgb & 0x000000F0) >> 4);
-
-      writePixel(x,y-70, r,g,b);
+  for (int y=0; y<128;y++) 
+  {
+    uint32_t linebuffer[160];
+    uint32_t d = 0;
+    for (int x=0; x<320; x++) 
+    {
+      uint32_t rgb = image[imgoffs++];      
+      d = d | ( ((rgb>>20)&1) << 0);    // R0
+      d = d | ( ((rgb>>12)&1) << 1);    // G0
+      d = d | ( ((rgb>>4 )&1) << 2);    // B0
+      d = d | ( ((rgb>>21)&1) << 3);    // R1
+      d = d | ( ((rgb>>13)&1) << 4);    // G1
+      d = d | ( ((rgb>>5 )&1) << 5);    // B1
+      d = d | ( ((rgb>>22)&1) << 6);    // R2
+      d = d | ( ((rgb>>14)&1) << 7);    // G2
+      d = d | ( ((rgb>>6 )&1) << 8);    // B2
+      d = d | ( ((rgb>>23)&1) << 9);    // R3
+      d = d | ( ((rgb>>15)&1) << 10);   // G3
+      d = d | ( ((rgb>>7 )&1) << 11);   // B3
+      if ((x%2)==0) { d = d << 16; }
+      else 
+      {
+        linebuffer[x/2]=d;
+        d=0;
+      }
     }
+    digitalWrite(16,HIGH);
+    distributeLineData(y, linebuffer);
+    digitalWrite(16,LOW);
   }
-
-/*
-  for (int y=0; y<256;y++) {
-    for (int x=0; x<320; x++) {
-      
-      int r = x/16;
-      int g = y/16;
-      int b = 0;
-      if (x>=256) {
-        r = 0;
-        g = 0;
-        b = y/16;
-      } 
-      writePixel(x,y, r,g,b);
-    }
-  }
-  */
 }
 
-void setup() {
+void setup() 
+{
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(PIN_OE, OUTPUT);
   pinMode(PIN_E, OUTPUT);
@@ -143,7 +181,8 @@ void setup() {
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
     channel_config_set_dreq(&c, DREQ_PIO0_TX0);
-    dma_channel_configure(
+    dma_channel_configure
+    (
       out_dma,
       &c,
       &pioout->txf[0],     // Write address (only need to set this once)
@@ -159,13 +198,14 @@ void setup() {
 //  noInterrupts();
 }
 
-void loop() {  
+void loop() 
+{  
   uint64_t startTime = time_us_64() + 1;
   int row;
  
   // display picture forever
-  for (;;)
-  for (row=0; row<32; row++) {
+  for (;;)  for (row=0; row<32; row++) 
+  {
       // start of all row processing 
       while(time_us_64() < startTime);
       // Start dma to output the current line of pixels
@@ -173,16 +213,23 @@ void loop() {
       // in case previous data was still visible, wait for this
       while(time_us_64() < startTime+8);
       // progress row selectors before most significant bit of this row is shown
-      if (row==0) {
+      if (row==0) 
+      {
           digitalWrite(PIN_E, LOW);
           digitalWrite(PIN_E, HIGH);
           digitalWrite(PIN_E, LOW);
-      } else if (row==16) {
+      } 
+      else if (row==16) 
+      {
           digitalWrite(PIN_E, HIGH);
-      } else if (row<16) {
+      }
+      else if (row<16) 
+      {
           digitalWrite(PIN_E, HIGH);
           digitalWrite(PIN_E, LOW);
-      } else {
+      } 
+      else 
+      {
           digitalWrite(PIN_E, LOW);
           digitalWrite(PIN_E, HIGH);
       }
@@ -190,3 +237,4 @@ void loop() {
       startTime = startTime + SCANLINE_TIMING;
   }
 }
+
