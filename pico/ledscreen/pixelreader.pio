@@ -1,0 +1,33 @@
+; receives the pixel data from the input pins and stores it to 
+; a DMA buffer. Each pixel has 12 bits that are provided on 6 input pins using
+; double data rate. at the rising edge of the input clock, the higher 6 bits are
+; also presented (need to delay a bit before reading), the lower 6 bits are 
+; available after the falling edge of the input clock.
+; 4 bits of extra padding are added to the dma stream per pixel, so every 32-bit
+; word contains two pixels (first pixel in the higher bits). 
+; after all pixels for one line are transfered, the sender stops the clock at the 
+; low state and sets the data pins to either all '0' or all '1'. ('0' means, this was
+; the first line of the frame). after a minimum of 0.1us, the next line may be sent.
+
+.program pixelreader
+.wrap_target
+waitforline:
+	mov isr,x                  ; clear shift register
+	wait 1 pin 6               ; indefinitely wait for start of line
+
+fetchpixel:
+	in null 4     [1]
+	in pins 6	      
+	
+	wait 0 pin 6  [1]
+	set x 31                   ; prepare the timeout value
+	in pins 6         
+	push iffull noblock
+	
+waitformorepixels:	           ; wait for next pixel, with timeout
+	jmp pin fetchpixel
+	jmp x-- waitformorepixels
+
+	irq nowait 0   [5]         ; notify CPU that the line is complete
+	irq clear 0
+.wrap

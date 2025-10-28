@@ -1,0 +1,10 @@
+#Start recording tcl command: 10/18/2025 23:40:45
+#Project Location: C:/Users/reinh/Documents/GitHub/LEDDisplay/diamond; Project name: HDMIdecoder
+prj_project new -name "HDMIdecoder" -impl "impl1" -dev LCMXO2-1200HC-5SG32C -synthesis "lse"
+prj_project save
+prj_src add "C:/Users/reinh/Documents/GitHub/LEDDisplay/diamond/HDMIdecoder.vhd"
+prj_src add "C:/Users/reinh/Documents/GitHub/LEDDisplay/diamond/PLLHDMI.v"
+prj_run Map -impl impl1 -task MapTrace
+prj_run Map -impl impl1 -task MapTrace
+prj_run Export -impl impl1 -task Jedecgen
+#Stop recording: 10/19/2025 00:13:48
