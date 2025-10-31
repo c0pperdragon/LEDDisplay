@@ -74,6 +74,7 @@ void distributeLineData(int line, uint32_t* data)
     outbuf1++;
     x = *outbuf0;        // bit 0
     x = x & cut_mask;
+    y = d;
     y = y<<shift;
     y = y & use_mask;
     x = x | y;
