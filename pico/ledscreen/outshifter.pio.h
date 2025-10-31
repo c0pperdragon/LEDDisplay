@@ -26,9 +26,9 @@ static const uint16_t outshifter_program_instructions[] = {
     0xe043, //  6: set    y, 3            side 0     
     0xa026, //  7: mov    x, isr          side 0     
     0x6110, //  8: out    pins, 16        side 0 [1] 
-    0x82c0, //  9: pull   ifempty noblock side 0 [2] 
-    0xaa42, // 10: nop                    side 1 [2] 
-    0x0048, // 11: jmp    x--, 8          side 0     
+    0x83c0, //  9: pull   ifempty noblock side 0 [3] 
+    0xa942, // 10: nop                    side 1 [1] 
+    0x0848, // 11: jmp    x--, 8          side 1     
     0xa742, // 12: nop                    side 0 [7] 
     0xd704, // 13: irq    nowait 4        side 2 [7] 
     0x0787, // 14: jmp    y--, 7          side 0 [7] 

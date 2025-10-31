@@ -210,6 +210,7 @@ void setup()
     sm_config_set_clkdiv(&c, 1.0);
     sm_config_set_in_shift(&c, false, false, 0);
     sm_config_set_out_shift(&c, false, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
     pio_sm_set_consecutive_pindirs(pioout, sm, PIN_CLK, 2, true);
 	  pio_sm_set_consecutive_pindirs(pioout, sm, PIN_RGB, 12, true);	
     pio_sm_init(pioout, sm, o, &c);
@@ -259,6 +260,7 @@ void setup()
     sm_config_set_clkdiv(&c, 1.0);
     sm_config_set_in_shift(&c, false, false, 32);
     sm_config_set_jmp_pin(&c, PIN_DATA+6);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     pio_sm_set_consecutive_pindirs(pioin, sm, PIN_DATA, 7, false);
 //    pio_sm_set_consecutive_pindirs(pioin, sm, PIN_DEBUG, 1, true);
     pio_sm_init(pioin, sm, o, &c);
