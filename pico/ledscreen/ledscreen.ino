@@ -33,6 +33,8 @@ int currentTotalLine = 0;   // line number of the original whole screen
 uint32_t screenbuffer[SCREENBUFFER_LEN];
 uint32_t readlinebuffer[160];
 
+int row_latch; // what is currently latched in the external counter
+
 void distributeLineData(int line, uint32_t* data)
 {
   int shift = 9 - (line/32) * 3;
@@ -121,6 +123,33 @@ void drawDemoImage()
   }
 }
 
+inline void updateRowLatch(int row)
+{
+  while (row_latch != row)
+  {
+    row_latch = (row_latch+1) % 32;
+    if (row_latch==0) 
+    {
+        digitalWrite(PIN_E, LOW);
+        digitalWrite(PIN_E, HIGH);
+        digitalWrite(PIN_E, LOW);
+    } 
+    else if (row_latch==16) 
+    {
+        digitalWrite(PIN_E, HIGH);
+    }
+    else if (row_latch<16) 
+    {
+        digitalWrite(PIN_E, HIGH);
+        digitalWrite(PIN_E, LOW);
+    } 
+    else 
+    {
+        digitalWrite(PIN_E, LOW);
+        digitalWrite(PIN_E, HIGH);
+    }
+  }
+}
 
 void lineFinishInterrupt()
 {
@@ -144,26 +173,7 @@ void lineFinishInterrupt()
     dma_channel_set_write_addr(in_dma, readlinebuffer, true);
 
     // progress row selectors before most significant bit of this row is shown
-    if (row==0) 
-    {
-        digitalWrite(PIN_E, LOW);
-        digitalWrite(PIN_E, HIGH);
-        digitalWrite(PIN_E, LOW);
-    } 
-    else if (row==16) 
-    {
-        digitalWrite(PIN_E, HIGH);
-    }
-    else if (row<16) 
-    {
-        digitalWrite(PIN_E, HIGH);
-        digitalWrite(PIN_E, LOW);
-    } 
-    else 
-    {
-        digitalWrite(PIN_E, LOW);
-        digitalWrite(PIN_E, HIGH);
-    }
+    updateRowLatch(row);
 
     // decode current line - I hope the CPU will stay ahead the DMA for the next line comming right behind
     int top = 64;
@@ -180,16 +190,12 @@ void setup()
   pinMode(PIN_E, OUTPUT);
   pinMode(PIN_DEBUG, OUTPUT);
 
-  // initialize the row counter for correct startup in state 31
+  // initialize the row counter for correct startup value
   digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, LOW);
   digitalWrite(PIN_E, HIGH);
   digitalWrite(PIN_OE, HIGH);
-  for (int row=0; row<15; row++)
-  {
-    digitalWrite(PIN_E, LOW);
-    digitalWrite(PIN_E, HIGH);
-  }
+  row_latch = 0;
   // set control pins to idle states
   digitalWrite(PIN_OE, HIGH);
   digitalWrite(PIN_E, LOW);
