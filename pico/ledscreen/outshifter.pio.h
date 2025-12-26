@@ -23,9 +23,9 @@ static const uint16_t outshifter_program_instructions[] = {
             //     .wrap_target
     0x80a0, //  4: pull   block           side 0     
     0xe043, //  5: set    y, 3            side 0     
-    0xa826, //  6: mov    x, isr          side 1     
-    0x88e0, //  7: pull   ifempty block   side 1     
-    0x6910, //  8: out    pins, 16        side 1 [1] 
+    0xa026, //  6: mov    x, isr          side 0     
+    0x8ae0, //  7: pull   ifempty block   side 1 [2] 
+    0x6810, //  8: out    pins, 16        side 1     
     0xaa42, //  9: nop                    side 1 [2] 
     0xa342, // 10: nop                    side 0 [3] 
     0x0047, // 11: jmp    x--, 7          side 0     

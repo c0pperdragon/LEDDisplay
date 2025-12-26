@@ -131,6 +131,7 @@ void updateRowLatch(int row)
 void setup() 
 {
   // set pin modes and idle values
+  digitalWrite(PIN_OE, HIGH);
   pinMode(PIN_OE, OUTPUT);
   digitalWrite(PIN_OE, HIGH);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -143,11 +144,11 @@ void setup()
   top = digitalRead(PIN_SEGMENTSELECTOR) ? 0 : 128;
 
   // reset the row counter latch to 0
+  digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, LOW);
-  digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_E, HIGH);
-  digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, HIGH);
+  digitalWrite(PIN_E, LOW);
   row_latch = 0;
 
   // startup values for various counters

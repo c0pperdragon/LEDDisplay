@@ -13,10 +13,10 @@
     pull block                side 0   ; get first bits of data
  	set y 3                   side 0   ; send total of 4 bit planes
 sendplane:	
-	mov x isr                 side 1   ; send 320 pixel per plane
+	mov x isr                 side 0   ; send 320 pixel per plane
 sendbits: 
-	pull ifempty block        side 1   ; clock for previous pixel and load more bits if shift register is empty
-    out pins 16           [1] side 1
+	pull ifempty block    [2] side 1   ; clock for previous pixel and load more bits if shift register is empty
+    out pins 16               side 1
 	nop                   [2] side 1
 	nop                   [3] side 0   ; end of clock for previous pixel
     jmp	x-- sendbits          side 0
