@@ -86,7 +86,7 @@ begin
 	
 	process (TESTCLK)
 	variable phase : integer range 0 to 3 := 0;
-	variable x : integer range 0 to 511 := 0;
+	variable x : integer range 0 to 1024 := 0;
 	variable y : integer range 0 to 255 := 0;
 	variable frame : integer range 0 to 255;
 	variable rgb:std_logic_vector(11 downto 0);
@@ -105,18 +105,7 @@ begin
 				end if;
 			end if;	
 			-- generate output signals
-			if x>=320 then
-				CLK_BIT <= '0';
-				if y=0 then
-					R_BIT <= "00";
-					G_BIT <= "00";
-					B_BIT <= "00";
-				else
-					R_BIT <= "11";
-					G_BIT <= "11";
-					B_BIT <= "11";
-				end if;
-			else
+			if x<320 then
 				if phase<=1 then
 					CLK_BIT <= '1';
 					R_BIT <= rgb(11 downto 10);
@@ -127,6 +116,21 @@ begin
 					R_BIT <= rgb(9 downto 8);
 					G_BIT <= rgb(5 downto 4);
 					B_BIT <= rgb(1 downto 0);
+				end if;			
+			else
+				if x<340 and phase<=1 then
+					CLK_BIT <= '1';
+				else
+					CLK_BIT <= '0';
+				end if;
+				if y=0 then
+					R_BIT <= "00";
+					G_BIT <= "00";
+					B_BIT <= "00";
+				else
+					R_BIT <= "11";
+					G_BIT <= "11";
+					B_BIT <= "11";
 				end if;
 			end if;
 			-- progress counters
@@ -134,7 +138,7 @@ begin
 				phase:=phase+1;
 			else
 				phase := 0;
-				if x<433-1 then
+				if x<520-1 then
 					x := x+1;
 				else 
 					x := 0;

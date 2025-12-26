@@ -21,6 +21,7 @@
 
 #define PIN_DATA 16 // Pins GIPO16 - GPIO22
 #define PIN_DEBUG 28
+#define PIN_SEGMENTSELECTOR 27
 
 #define SCREENBUFFER_LEN        ((320/2)*4*32)   // screen buffer size in uint32
 
@@ -29,11 +30,18 @@ int out_dma;      //dma for outputshifter
 PIO pioin;        //pioblock for data reader
 int in_dma;      //dma for pixel data receiver
 
+int top = 0;                // first line of whole screen to be shown by this program
+
 int currentTotalLine = 0;   // line number of the original whole screen
 uint32_t screenbuffer[SCREENBUFFER_LEN];
-uint32_t readlinebuffer[160];
-
+int currentreadbuffer = 0;
+uint32_t readlinebuffer[2*160];  // hold two lines of input data - is used alternately to avoid access conflicts
 int row_latch; // what is currently latched in the external counter
+
+// Use the CPU to rearrange the incomming data from a pixel-by pixel format to the
+// output buffer where all the bits for one LED segment (0 - 7) are grouped together 
+// The input format is 16 bits for each pixel, with the left pixel of each pair in the higher 16 bits of each word.
+// The 16 bits for a pixel are organized like this: 0000RRRRGGGGBBBB   
 
 void distributeLineData(int line, uint32_t* data)
 {
@@ -44,62 +52,40 @@ void distributeLineData(int line, uint32_t* data)
   uint32_t* outbuf2 = outbuf3 + 160;
   uint32_t* outbuf1 = outbuf2 + 160;
   uint32_t* outbuf0 = outbuf1 + 160;
-  int i=160;
-  do  // hand-crafted code to mimic cortex m0 assembly
-  {
-    uint32_t d = *data;
+  for (int i=0; i<160; i++)
+  {                        
+    uint32_t d = *(data++);
     uint32_t x,y; 
-    data++;
-    x = *outbuf3;        // bit 3
-    x = x & cut_mask;
-    y = d>>9;
-    y = y<<shift;
-    y = y & use_mask;
-    x = x | y;
-    *outbuf3 = x;
+    x = (*outbuf3) & cut_mask;        // bit 3
+    y = ((d>>9) << shift) & use_mask;
+    *outbuf3 = x | y;
     outbuf3++;
-    x = *outbuf2;        // bit 2
-    x = x & cut_mask;
-    y = d>>6;
-    y = y<<shift;
-    y = y & use_mask;
-    x = x | y;
-    *outbuf2 = x;
+    x = (*outbuf2) & cut_mask;        // bit 2
+    y = ((d>>6) << shift) & use_mask;
+    *outbuf2 = x | y;
     outbuf2++;
-    x = *outbuf1;        // bit 1
-    x = x & cut_mask;
-    y = d>>3;
-    y = y<<shift;
-    y = y & use_mask;
-    x = x | y;
-    *outbuf1 = x;
+    x = (*outbuf1) & cut_mask;        // bit 1
+    y = ((d>>3) << shift) & use_mask;
+    *outbuf1 = x | y;
     outbuf1++;
-    x = *outbuf0;        // bit 0
-    x = x & cut_mask;
-    y = d;
-    y = y<<shift;
-    y = y & use_mask;
-    x = x | y;
-    *outbuf0 = x;
+    x = (*outbuf0) & cut_mask;        // bit 0
+    y = ((d) << shift) & use_mask;
+    *outbuf0 = x | y;
     outbuf0++;
-    i--;
   } 
-  while (i);
 }
 
 // extract demo picture into screen buffer
 void drawDemoImage() 
 {
-  int imgoffs=320*70;
-  memset( screenbuffer, 0x47c3a230, sizeof(screenbuffer) );  // fill with some nonsense
+  int imgoffs=320*top;
 
   for (int y=0; y<128;y++) 
   {
-    uint32_t linebuffer[160];
     uint32_t d = 0;
     for (int x=0; x<320; x++) 
     {
-      uint32_t rgb = image[imgoffs++];      
+      uint32_t rgb = image[imgoffs++];
       d = d | ( ((rgb>>20)&1) << 0);    // R0
       d = d | ( ((rgb>>12)&1) << 1);    // G0
       d = d | ( ((rgb>>4 )&1) << 2);    // B0
@@ -115,92 +101,59 @@ void drawDemoImage()
       if ((x%2)==0) { d = d << 16; }
       else 
       {
-        linebuffer[x/2]=d;
+        readlinebuffer[x/2]=d;
         d=0;
       }
     }
-    distributeLineData(y, linebuffer);
+    distributeLineData(y, readlinebuffer);
   }
 }
 
-inline void updateRowLatch(int row)
+void updateRowLatch(int row)
 {
-  while (row_latch != row)
+  int i;
+  for (i=0; (i<4) & (row_latch != row); i++)
   {
-    row_latch = (row_latch+1) % 32;
-    if (row_latch==0) 
-    {
-        digitalWrite(PIN_E, LOW);
-        digitalWrite(PIN_E, HIGH);
-        digitalWrite(PIN_E, LOW);
-    } 
-    else if (row_latch==16) 
+    if (row_latch<16) 
     {
         digitalWrite(PIN_E, HIGH);
-    }
-    else if (row_latch<16) 
-    {
-        digitalWrite(PIN_E, HIGH);
-        digitalWrite(PIN_E, LOW);
-    } 
-    else 
-    {
-        digitalWrite(PIN_E, LOW);
-        digitalWrite(PIN_E, HIGH);
-    }
-  }
-}
-
-void lineFinishInterrupt()
-{
-    if (digitalRead(PIN_DATA)==LOW)
-    {
-      currentTotalLine=0;
+        row_latch = ((row_latch+1) & 15) + 16;
     }
     else
     {
-      currentTotalLine++;
+        digitalWrite(PIN_E, LOW);
+        row_latch = row_latch-16;
     }
-
-    // which rows to show next to have minimum delay, but avoid access conflict
-    int row = ((currentTotalLine+29)%32);
-
-    // Start dma to output the pixels of the row 
-    dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*row, true);
-
-    // prepare dma to read the next line
-    dma_channel_abort(in_dma);
-    dma_channel_set_write_addr(in_dma, readlinebuffer, true);
-
-    // progress row selectors before most significant bit of this row is shown
-    updateRowLatch(row);
-
-    // decode current line - I hope the CPU will stay ahead the DMA for the next line comming right behind
-    int top = 64;
-    if (currentTotalLine>=top && currentTotalLine<top+128)
-    {
-      distributeLineData(currentTotalLine-top, readlinebuffer);
-    }
+  }
 }
+
 
 void setup() 
 {
-  pinMode(LED_BUILTIN, OUTPUT);
+  // set pin modes and idle values
   pinMode(PIN_OE, OUTPUT);
+  digitalWrite(PIN_OE, HIGH);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
   pinMode(PIN_E, OUTPUT);
-  pinMode(PIN_DEBUG, OUTPUT);
-
-  // initialize the row counter for correct startup value
-  digitalWrite(PIN_E, LOW);
-  digitalWrite(PIN_OE, LOW);
   digitalWrite(PIN_E, HIGH);
+  pinMode(PIN_DEBUG, OUTPUT);
+  digitalWrite(PIN_DEBUG, LOW);
+  pinMode(PIN_SEGMENTSELECTOR, INPUT_PULLUP);
+  top = digitalRead(PIN_SEGMENTSELECTOR) ? 0 : 128;
+
+  // reset the row counter latch to 0
+  digitalWrite(PIN_OE, LOW);
+  digitalWrite(PIN_E, LOW);
+  digitalWrite(PIN_E, HIGH);
+  digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, HIGH);
   row_latch = 0;
-  // set control pins to idle states
-  digitalWrite(PIN_OE, HIGH);
-  digitalWrite(PIN_E, LOW);
-  digitalWrite(LED_BUILTIN, HIGH);
-  digitalWrite(PIN_DEBUG, LOW);
+
+  // startup values for various counters
+  drawDemoImage();
+  currentTotalLine = -1;
+  currentreadbuffer = 0;
 
   //Setup pio block and state machines for driving the LEDs
   pioout = pio0;
@@ -254,25 +207,11 @@ void setup()
     );
   }
 
-  //Setup pio block and state machines for reading input data
-  pioin = pio1;
-//  pio_gpio_init(pioin, PIN_DEBUG);
-  for (int i=0;i<7;i++) { pio_gpio_init(pioin, PIN_DATA+i); }  
-  {
-    int sm = pio_claim_unused_sm(pioin, true);
-    int o = pio_add_program(pioin, &pixelreader_program);
-    pio_sm_config c = pixelreader_program_get_default_config(o);
-    sm_config_set_in_pins(&c, PIN_DATA);
-//    sm_config_set_sideset_pins(&c, PIN_DEBUG);
-    sm_config_set_clkdiv(&c, 1.0);
-    sm_config_set_in_shift(&c, false, false, 32);
-    sm_config_set_jmp_pin(&c, PIN_DATA+6);
-    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-    pio_sm_set_consecutive_pindirs(pioin, sm, PIN_DATA, 7, false);
-//    pio_sm_set_consecutive_pindirs(pioin, sm, PIN_DEBUG, 1, true);
-    pio_sm_init(pioin, sm, o, &c);
-	  pio_sm_set_enabled(pioin, sm, true);
-  }
+  pioin = pio1;  
+  // set up interrupt for incomming scanlines of data
+  irq_set_exclusive_handler(PIO_IRQ_NUM(pioin, 0), lineFinishInterrupt);
+  irq_set_enabled(PIO_IRQ_NUM(pioin, 0), true);
+  pio_set_irq0_source_enabled(pioin, pis_interrupt0, true);
   //Setup dma channel for receiving bit data
   in_dma = dma_claim_unused_channel(true);
   {
@@ -291,11 +230,61 @@ void setup()
       true                 // Start immediately, waiting for data
     );
   }
+  //Setup pio block and state machines for reading input data
+  for (int i=0;i<7;i++) { pio_gpio_init(pioin, PIN_DATA+i); }  
+  {
+    int sm = pio_claim_unused_sm(pioin, true);
+    int o = pio_add_program(pioin, &pixelreader_program);
+    pio_sm_config c = pixelreader_program_get_default_config(o);
+    sm_config_set_in_pins(&c, PIN_DATA);
+    sm_config_set_clkdiv(&c, 1.0);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_jmp_pin(&c, PIN_DATA+6);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_set_consecutive_pindirs(pioin, sm, PIN_DATA, 7, false);
+    pio_sm_init(pioin, sm, o, &c);
+	  pio_sm_set_enabled(pioin, sm, true);
+  }
+//digitalWrite(PIN_DEBUG,LOW);
+}
 
-  // set up interrupt for incomming scanlines of data
-  irq_set_exclusive_handler(PIO_IRQ_NUM(pioin, 0), lineFinishInterrupt);
-  irq_set_enabled(PIO_IRQ_NUM(pioin, 0), true);
-  pio_set_irq0_source_enabled(pioin, pis_interrupt0, true);
+void lineFinishInterrupt()
+{
+    // immediately prepare dma to read the next line
+    dma_channel_set_write_addr(in_dma, readlinebuffer+160*(1-currentreadbuffer), true);
+
+    // detect input frame start or progress line
+    if (digitalRead(PIN_DATA)==LOW)
+    {
+      currentTotalLine=0;
+    }
+    else if (currentTotalLine>=0)
+    {
+      currentTotalLine++;
+    }
+    else
+    {
+      return;
+    }
+
+    // which rows to show next to have small delay, but avoid access conflict
+    int row = ((currentTotalLine+29)%32);
+
+    // Start dma to output the pixels of the row 
+    dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*row, true);
+
+    // Wait until the lowest bit of the previous line was surely completely shown (with OE low)
+    busy_wait_us_32(3);
+
+    // progress row selectors before most significant bit of this row becomes visible
+    updateRowLatch(row);
+
+    // decode the currently read line 
+    if (currentTotalLine>=top && currentTotalLine<top+128)
+    {
+//      distributeLineData(currentTotalLine-top, readlinebuffer+160*currentreadbuffer);
+    }
+    currentreadbuffer = 1-currentreadbuffer;
 }
 
 

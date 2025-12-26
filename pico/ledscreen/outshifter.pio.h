@@ -21,17 +21,17 @@ static const uint16_t outshifter_program_instructions[] = {
     0xe02f, //  2: set    x, 15           side 0     
     0x4024, //  3: in     x, 4            side 0     
             //     .wrap_target
-    0x8080, //  4: pull   noblock         side 0     
-    0x80a0, //  5: pull   block           side 0     
-    0xe043, //  6: set    y, 3            side 0     
-    0xa026, //  7: mov    x, isr          side 0     
-    0x6110, //  8: out    pins, 16        side 0 [1] 
-    0x83c0, //  9: pull   ifempty noblock side 0 [3] 
-    0xa942, // 10: nop                    side 1 [1] 
-    0x0848, // 11: jmp    x--, 8          side 1     
-    0xa742, // 12: nop                    side 0 [7] 
+    0x80a0, //  4: pull   block           side 0     
+    0xe043, //  5: set    y, 3            side 0     
+    0xa826, //  6: mov    x, isr          side 1     
+    0x88e0, //  7: pull   ifempty block   side 1     
+    0x6910, //  8: out    pins, 16        side 1 [1] 
+    0xaa42, //  9: nop                    side 1 [2] 
+    0xa342, // 10: nop                    side 0 [3] 
+    0x0047, // 11: jmp    x--, 7          side 0     
+    0xaf42, // 12: nop                    side 1 [7] 
     0xd704, // 13: irq    nowait 4        side 2 [7] 
-    0x0787, // 14: jmp    y--, 7          side 0 [7] 
+    0x0786, // 14: jmp    y--, 6          side 0 [7] 
             //     .wrap
 };
 

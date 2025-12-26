@@ -1,5 +1,5 @@
 ; shifting out 4 lines of pixels with 4 bits on r,g,b each. 
-; first all most siginficant bits are shifted and latched,
+; first all most significant bits are shifted and latched,
 ; then the progressively less significant bits, until all 4 bits were
 ; transported. 
 
@@ -8,19 +8,19 @@
     set x 0x13                side 0   ; construct number 319 = $13F in ISR
 	mov isr x                 side 0   ; to make this work, need to set direction to left
 	set x 0xf                 side 0   ; 
-	in x 4                    side 0
+	in x 4                    side 0  
 .wrap_target
-	pull noblock              side 0   ; clear dma channel, just in case
-    pull block                side 0   ; wait until data is available	
+    pull block                side 0   ; get first bits of data
  	set y 3                   side 0   ; send total of 4 bit planes
 sendplane:	
-	mov x isr                 side 0   ; send 320 pixel (times 4) per plane
+	mov x isr                 side 1   ; send 320 pixel per plane
 sendbits: 
-    out pins 16           [1] side 0
-	pull ifempty noblock  [3] side 0
-    nop	                  [1] side 1   ; clock for pixel
-    jmp	x-- sendbits          side 1
-	nop                   [7] side 0
-	irq nowait 4          [7] side 2   ; latch data and notify partner state machine
+	pull ifempty block        side 1   ; clock for previous pixel and load more bits if shift register is empty
+    out pins 16           [1] side 1
+	nop                   [2] side 1
+	nop                   [3] side 0   ; end of clock for previous pixel
+    jmp	x-- sendbits          side 0
+	nop                   [7] side 1   ; clock for last pixel 
+	irq nowait 4          [7] side 2   ; notify partner state machine and latch data
     jmp y-- sendplane     [7] side 0   ; continue with next plane
 .wrap

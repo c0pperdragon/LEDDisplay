@@ -13,29 +13,40 @@
 // ----------- //
 
 #define pixelreader_wrap_target 0
-#define pixelreader_wrap 11
+#define pixelreader_wrap 22
 
 static const uint16_t pixelreader_program_instructions[] = {
             //     .wrap_target
-    0xa0c1, //  0: mov    isr, x                     
-    0x20a6, //  1: wait   1 pin, 6                   
-    0x4164, //  2: in     null, 4                [1] 
-    0x4006, //  3: in     pins, 6                    
-    0x2126, //  4: wait   0 pin, 6               [1] 
+    0xe033, //  0: set    x, 19                      
+    0xa0c1, //  1: mov    isr, x                     
+    0xe02f, //  2: set    x, 15                      
+    0x4024, //  3: in     x, 4                       
+    0xa046, //  4: mov    y, isr                     
     0xe03f, //  5: set    x, 31                      
-    0x4006, //  6: in     pins, 6                    
-    0x8040, //  7: push   iffull noblock             
-    0x00c2, //  8: jmp    pin, 2                     
-    0x0048, //  9: jmp    x--, 8                     
-    0xc500, // 10: irq    nowait 0               [5] 
-    0xc040, // 11: irq    clear 0                    
+    0x00c5, //  6: jmp    pin, 5                     
+    0x00c5, //  7: jmp    pin, 5                     
+    0x00c5, //  8: jmp    pin, 5                     
+    0x00c5, //  9: jmp    pin, 5                     
+    0x00c5, // 10: jmp    pin, 5                     
+    0x0046, // 11: jmp    x--, 6                     
+    0xa0c1, // 12: mov    isr, x                     
+    0x20a6, // 13: wait   1 pin, 6                   
+    0x4664, // 14: in     null, 4                [6] 
+    0x4006, // 15: in     pins, 6                    
+    0x2026, // 16: wait   0 pin, 6                   
+    0xa621, // 17: nop                           [6] 
+    0x4006, // 18: in     pins, 6                    
+    0x8060, // 19: push   iffull block               
+    0x008d, // 20: jmp    y--, 13                    
+    0xc500, // 21: irq    nowait 0               [5] 
+    0xc040, // 22: irq    clear 0                    
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program pixelreader_program = {
     .instructions = pixelreader_program_instructions,
-    .length = 12,
+    .length = 23,
     .origin = -1,
 };
 
