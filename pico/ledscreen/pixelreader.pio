@@ -32,17 +32,18 @@ waitforidle:                   ; wait until clock is low for at least 1us
 	mov isr x                  ; clear shift register in preparation to read pixels
 
 fetchpixel:
-	wait 1 pin 6               ; read first half of pixel
-	in null 4     [6]
-	in pins 6	      
+	wait 1 pin 6               
+	push iffull block          ; put data to buffer when having collected 2 pixels
+	in null 4     [9]
+	in pins 6	               ; read first half of pixel 
 	
-	wait 0 pin 6               ; read second half of pixel
-	mov x x       [6]
-	in pins 6     
+	wait 0 pin 6               
+	nop           [10]
+	in pins 6                  ; read second half of pixel
 	
-	push iffull block
 	jmp y-- fetchpixel
 
+    push iffull block          ; after finish store content of buffer
 	irq nowait 0   [5]         ; notify CPU that the line is complete
 	irq clear 0
 .wrap

@@ -41,7 +41,6 @@ int row_latch; // what is currently latched in the external counter
 // Use the CPU to rearrange the incomming data from a pixel-by pixel format to the
 // output buffer where all the bits for one LED segment (0 - 7) are grouped together 
 // The input format is 16 bits for each pixel, with the left pixel of each pair in the higher 16 bits of each word.
-// The 16 bits for a pixel are organized like this: 0000RRRRGGGGBBBB   
 
 void distributeLineData(int line, uint32_t* data)
 {
@@ -112,7 +111,7 @@ void drawDemoImage()
 void updateRowLatch(int row)
 {
   int i;
-  for (i=0; (i<4) & (row_latch != row); i++)
+  for (i=0; (i<6) & (row_latch != row); i++)
   {
     if (row_latch<16) 
     {
@@ -152,7 +151,8 @@ void setup()
   row_latch = 0;
 
   // startup values for various counters
-  drawDemoImage();
+  memset(screenbuffer, 0, SCREENBUFFER_LEN*4);
+//  drawDemoImage();
   currentTotalLine = -1;
   currentreadbuffer = 0;
 
@@ -246,7 +246,6 @@ void setup()
     pio_sm_init(pioin, sm, o, &c);
 	  pio_sm_set_enabled(pioin, sm, true);
   }
-//digitalWrite(PIN_DEBUG,LOW);
 }
 
 void lineFinishInterrupt()
@@ -283,8 +282,11 @@ void lineFinishInterrupt()
     // decode the currently read line 
     if (currentTotalLine>=top && currentTotalLine<top+128)
     {
-//      distributeLineData(currentTotalLine-top, readlinebuffer+160*currentreadbuffer);
+      digitalWrite(PIN_DEBUG, HIGH);
+      distributeLineData(currentTotalLine-top, readlinebuffer+(160*currentreadbuffer));
+      digitalWrite(PIN_DEBUG, LOW);
     }
+    // switch buffers
     currentreadbuffer = 1-currentreadbuffer;
 }
 

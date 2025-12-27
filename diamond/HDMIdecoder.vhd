@@ -138,7 +138,7 @@ begin
 				phase:=phase+1;
 			else
 				phase := 0;
-				if x<550-1 then
+				if x<530-1 then
 					x := x+1;
 				else 
 					x := 0;

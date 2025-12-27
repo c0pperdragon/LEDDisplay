@@ -13,7 +13,7 @@
 // ----------- //
 
 #define pixelreader_wrap_target 0
-#define pixelreader_wrap 22
+#define pixelreader_wrap 23
 
 static const uint16_t pixelreader_program_instructions[] = {
             //     .wrap_target
@@ -31,22 +31,23 @@ static const uint16_t pixelreader_program_instructions[] = {
     0x0046, // 11: jmp    x--, 6                     
     0xa0c1, // 12: mov    isr, x                     
     0x20a6, // 13: wait   1 pin, 6                   
-    0x4664, // 14: in     null, 4                [6] 
-    0x4006, // 15: in     pins, 6                    
-    0x2026, // 16: wait   0 pin, 6                   
-    0xa621, // 17: nop                           [6] 
-    0x4006, // 18: in     pins, 6                    
-    0x8060, // 19: push   iffull block               
+    0x8060, // 14: push   iffull block               
+    0x4964, // 15: in     null, 4                [9] 
+    0x4006, // 16: in     pins, 6                    
+    0x2026, // 17: wait   0 pin, 6                   
+    0xaa42, // 18: nop                           [10]
+    0x4006, // 19: in     pins, 6                    
     0x008d, // 20: jmp    y--, 13                    
-    0xc500, // 21: irq    nowait 0               [5] 
-    0xc040, // 22: irq    clear 0                    
+    0x8060, // 21: push   iffull block               
+    0xc500, // 22: irq    nowait 0               [5] 
+    0xc040, // 23: irq    clear 0                    
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program pixelreader_program = {
     .instructions = pixelreader_program_instructions,
-    .length = 23,
+    .length = 24,
     .origin = -1,
 };
 
