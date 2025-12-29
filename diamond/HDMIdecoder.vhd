@@ -6,24 +6,27 @@ use machxo2.all;
 
 entity HDMIDecoder is	
 	port (
-		CLKIN       : in std_logic;
-		RED         : in std_logic;		
-		GREEN       : in std_logic;
-		BLUE        : in std_logic;
+		C          : in std_logic;
+		D0         : in std_logic;		
+		D1         : in std_logic;
+		D2         : in std_logic;
 		
-		R_BIT       : out std_logic_vector(1 downto 0);
-		G_BIT       : out std_logic_vector(1 downto 0);
-		B_BIT       : out std_logic_vector(1 downto 0);
-		CLK_BIT     : out std_logic;
+		R_BIT      : out std_logic_vector(1 downto 0);
+		G_BIT      : out std_logic_vector(1 downto 0);
+		B_BIT      : out std_logic_vector(1 downto 0);
+		CLK_BIT    : out std_logic;
 		
-		DUMMY       : out std_logic
+		SCL        : in std_logic;
+		SDA        : inout std_logic;
+		
+		DUMMY      : out std_logic
 	);	
 
 	ATTRIBUTE IO_TYPES : string;
-	ATTRIBUTE IO_TYPES OF CLKIN: SIGNAL IS "LVDS,-";
-	ATTRIBUTE IO_TYPES OF RED: SIGNAL IS "LVDS,-";
-	ATTRIBUTE IO_TYPES OF GREEN: SIGNAL IS "LVDS,-";
-	ATTRIBUTE IO_TYPES OF BLUE: SIGNAL IS "LVDS,-";
+	ATTRIBUTE IO_TYPES OF C:  SIGNAL IS "LVDS,-";
+	ATTRIBUTE IO_TYPES OF D0: SIGNAL IS "LVDS,-";
+	ATTRIBUTE IO_TYPES OF D1: SIGNAL IS "LVDS,-";
+	ATTRIBUTE IO_TYPES OF D2: SIGNAL IS "LVDS,-";
 end entity;
 
 architecture immediate of HDMIDecoder is
@@ -56,7 +59,7 @@ signal TESTCLK:std_logic;
 
 begin
 	pll: PLLHDMI
-	PORT MAP ( CLKI => CLKIN, CLKOP => CLK, CLKOS => CLKFAST );
+	PORT MAP ( CLKI => C, CLKOP => CLK, CLKOS => CLKFAST );
 	
 	OSCInst0: OSCH
 	GENERIC MAP( NOM_FREQ => "26.6" )
@@ -71,9 +74,9 @@ begin
 	variable bits:std_logic_vector(29 downto 0);
 	begin
 		if rising_edge(CLKFAST) then
-			r := r(8 downto 0) & RED;
-			g := g(8 downto 0) & GREEN;
-			b := b(8 downto 0) & BLUE;
+			r := r(8 downto 0) & D0;
+			g := g(8 downto 0) & D1;
+			b := b(8 downto 0) & D2;
 		end if;
 		if rising_edge(CLK) then
 			DUMMY <= bits(29) xor bits(28) xor bits(27) xor bits(26) xor bits(25) xor bits(24) xor bits(23) xor bits(22) xor bits(21) xor bits(20)
@@ -149,6 +152,19 @@ begin
 						frame := (frame+1) mod 256;
 					end if;
 				end if;
+			end if;
+		end if;
+	end process;
+
+	process (SCL)
+	variable toggle:boolean := false;
+	begin
+		if falling_edge(SCL) then
+			toggle := not toggle;
+			if toggle then 
+				SDA <= '0';
+			else
+				SDA <= 'Z';
 			end if;
 		end if;
 	end process;
