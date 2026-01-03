@@ -31,6 +31,19 @@ end entity;
 
 architecture immediate of HDMIDecoder is
 
+type Tedid is array (0 to 127) of integer;
+function make_checksums (edid : in Tedid) return Tedid is
+    variable res : Tedid;
+	variable s1:integer;
+  begin
+    s1 := 0;
+	for i in 0 to 126 loop
+		s1 := (s1 + edid(i)) mod 256;
+	end loop;
+	res(0 to 126) := edid(0 to 126);
+	res(127) := (256 - s1) mod 256;
+    return res;
+  end;
 
 -- PLL outputs 2 clocks: 
 -- pass-through pixel input clock ()
@@ -56,6 +69,8 @@ signal CLK:std_logic;
 signal CLKFAST:std_logic;
 
 signal TESTCLK:std_logic;  
+signal SDA_DEGLITCH:std_logic;
+signal SCL_DEGLITCH:std_logic;
 
 begin
 	pll: PLLHDMI
@@ -156,107 +171,195 @@ begin
 		end if;
 	end process;
 
+
+
+	-- de-glitch the SDA
+	process (TESTCLK)
+	variable locktime:integer range 0 to 15 := 0;
+	variable value:std_logic := '1';
+	variable newvalue:std_logic := '1';	
+	begin
+		if rising_edge(TESTCLK) then
+			if value/=newvalue then
+				if locktime>0 then
+					locktime:=locktime-1;
+				else
+					value:=newvalue;
+					locktime:=15;
+				end if;
+			end if;
+			newvalue := SDA;
+		end if;
+		SDA_DEGLITCH <= value;
+	end process;
+	-- de-glitch the SCL
+	process (TESTCLK)
+	variable locktime:integer range 0 to 15 := 0;
+	variable value:std_logic := '1';
+	variable newvalue:std_logic := '1';
+	begin
+		if rising_edge(TESTCLK) then
+			if value/=newvalue then
+				if locktime>0 then
+					locktime:=locktime-1;
+				else
+					value:=newvalue;
+					locktime:=15;
+				end if;
+			end if;
+			newvalue := SCL;
+		end if;
+		SCL_DEGLITCH <= value;
+	end process;
+	
     -- send EDID
-	process (SCL,SDA)
-	type Tedid is array (0 to 255) of integer;
-	constant edid:Tedid := 
-	(  	16#00#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#00#,                                                                    -- standard header
-		16#0d#,16#f0#,16#01#,16#00#,16#01#,16#00#,16#00#,16#00#,16#0a#,16#22#,                                                      -- manufacturer info
-		16#01#,16#03#,                                                                                                                -- EDID version
-		16#a0#,                                                                                                                       -- video input parameters
-		16#28#,16#1e#,                                                                                                                -- screen size in cm
-		16#78#,                                                                                                                       -- gamma factor
-		16#06#,                                                                                                                       -- supported features bitmap    
-		16#EE#,16#91#,16#A3#,16#54#,16#4C#,16#99#,16#26#,16#0F#,16#50#,16#54#,                                                      -- chromaticity coordinates 
-		16#00#,16#00#,16#00#,                                                                                                         -- established modes
-		16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,           -- standard modes
-		16#8c#,16#0a#,16#a0#,16#20#,16#51#,16#20#,16#18#,16#10#,16#18#,16#80#,16#33#,16#00#,16#90#,16#2c#,16#11#,16#00#,16#00#,16#18#, -- detailed timing descriptor: 14416#288
+	process (SCL_DEGLITCH,SDA_DEGLITCH,TESTCLK)
+	constant pixelclock:integer := 27000000/10000;
+	constant hvisible:integer := 720;
+	constant hfront:integer := 12;
+	constant hsync:integer := 64;
+	constant hback:integer := 68;
+	constant hblanking:integer := hfront+hsync+hback;
+	constant hsize_mm:integer := 960;
+	constant vvisible:integer := 576;
+	constant vfront:integer := 5;
+	constant vsync:integer := 5;
+	constant vback:integer := 39;
+	constant vblanking:integer := vfront+vsync+vback;
+	constant vsize_mm:integer := 768;
+	constant edid_without_sums:Tedid := (
+		16#00#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#00#,                                                                        -- standard header
+		16#0d#,16#f0#,16#01#,16#00#,16#01#,16#00#,16#00#,16#00#,16#0a#,16#22#,                                                          -- manufacturer info
+		16#01#,16#03#,                                                                                                                    -- EDID version
+		16#a0#,                                                                                                                           -- video input parameters
+		16#28#,16#1e#,                                                                                                                    -- screen size in cm
+		16#78#,                                                                                                                           -- gamma factor
+		16#06#,                                                                                                                           -- supported features bitmap    
+		16#EE#,16#91#,16#A3#,16#54#,16#4C#,16#99#,16#26#,16#0F#,16#50#,16#54#,                                                          -- chromaticity coordinates 
+		16#00#,16#00#,16#00#,                                                                                                             -- established modes
+		16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,16#01#,               -- standard modes
+		-- detailed timing descriptor
+		pixelclock mod 256,                                                      -- 0
+		pixelclock/256,                                                          -- 1
+		hvisible mod 256,                                                        -- 2
+		hblanking mod 256,                                                       -- 3
+		16*(hvisible/256) + (hblanking/256),                                    -- 4
+		vvisible mod 256,                                                        -- 5
+		vblanking mod 256,                                                       -- 6
+		16*(vvisible/256) + (vblanking/256),                                    -- 7
+		hfront mod 256,                                                          -- 8
+		hsync mod 256,                                                           -- 9
+		16*(vfront mod 16) + (vsync mod 16),                                    -- 10
+		64*(hfront/256) + 16*(hsync/256) + 4*(vfront/16) + (vsync/16),         -- 11
+		hsize_mm mod 256,                                                        -- 12
+		vsize_mm mod 256,                                                        -- 13
+		16*(hsize_mm/256) + (vsize_mm/256),                                     -- 14
+		0,                                                                       -- 15
+		0,                                                                       -- 16
+		2#00011000#,                                                             -- 17
 		16#00#,16#00#,16#00#,16#fc#,16#00#,16#48#,16#44#,16#4d#,16#49#,16#32#,16#53#,16#43#,16#41#,16#52#,16#54#,16#0a#,16#20#,16#20#, -- monitor information
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
-		16#01#,                                                                                                                           -- number of extension blocks
-		16#00#,                                                                                                                           -- place for checksum
-		16#02#,16#03#,16#10#,16#40#,                                                                                                     -- header: support basic audio, 0 native formats
-		16#23#,16#09#,16#07#,16#07#,                                                                                                     -- audio data block
-		16#83#,16#01#,16#20#,16#20#,                                                                                                     -- speaker allocation
-		16#63#,16#03#,16#0c#,16#00#,                                                                                                     -- IEEE registration identifier
-		16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,
-		16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#  
+		16#00#,                                                                                                                            -- number of extension blocks
+		16#00#                                                                                                                             -- place for checksum
 	);
-	type Tstate is (idle, address, ack, transfer);
+	constant edid:Tedid := make_checksums(edid_without_sums);
+	type Tstate is (idle, address, ackaddr, transfer, acktrans);
+	variable sda_history:std_logic_vector(15 downto 0) := "1111111111111111";
+	variable scl_history:std_logic_vector(15 downto 0) := "1111111111111111";
+	variable detect_start:boolean := false;
 	variable state: Tstate := idle;
-	variable scl_on_falling_sda:std_logic := '0';
-	variable sda_on_rising_scl:std_logic := '0';
-	variable writebuffer:std_logic_vector(6 downto 0);
+	variable addrbuffer:std_logic_vector(6 downto 0);
+	variable writebuffer:std_logic_vector(7 downto 0);
 	variable readbuffer:std_logic_vector(7 downto 0);
-	variable bitcount:integer range 7 downto 0;
+	variable bitcount:integer range 0 to 7;
 	variable readmode:boolean;
 	variable index:integer range 0 to 255 := 0;
 	variable isfirstbyte:boolean;
 	variable out_sda:std_logic := '1';
 	begin
-		if falling_edge(SDA) then
-			scl_on_falling_sda := SDA;
+		if rising_edge(TESTCLK) then
+			if sda_history="1111111100000000" then
+				detect_start := scl_history="1111111111111111";
+			elsif scl_history = "0000000011111111" then
+				detect_start := false;
+			end if;
+			sda_history := sda_history(14 downto 0) & SDA_DEGLITCH;
+			scl_history := scl_history(14 downto 0) & SCL_DEGLITCH;
 		end if;
-		if rising_edge(SCL) then
-			sda_on_rising_scl := SCL;
-		end if;
-		if falling_edge(SCL) then
-			SDA <= 'Z';
-			-- detect a previous start condition
-			if SDA='0' and scl_on_falling_sda='1' then   
+	
+		if rising_edge(SCL_DEGLITCH) then
+			out_sda := '1';
+			if detect_start then   
 				state := address;
-				bitcount := 0;
+				addrbuffer := "000000" & SDA_DEGLITCH;
+				bitcount := 1;
 			else
 				-- state machine
 				case state is
 				when address =>
 					if bitcount<7 then
-						writebuffer := writebuffer(5 downto 0) & sda_on_rising_scl;
+						addrbuffer := addrbuffer(5 downto 0) & SDA_DEGLITCH;
 						bitcount := bitcount+1;
-					elsif writebuffer = "1010000" then
-						readmode := sda_on_rising_scl='1';
-						state := ack;
-						SDA <= '0';   -- ack after matching address
-					else
+					elsif addrbuffer = "1010000" then
+						readmode := SDA_DEGLITCH='1';
+						isfirstbyte := true;
+						state := ackaddr;
+						out_sda := '0';   -- ack after matching address
+					else 
 						state := idle;
 					end if;
-				when ack =>
-					state := transfer;
-					isfirstbyte := true;
-					bitcount := 0;
+				when ackaddr =>
 					if readmode then
 						readbuffer := std_logic_vector(to_unsigned(edid(index), 8));
-						SDA <= readbuffer(7);
+						out_sda := readbuffer(7);
 						readbuffer := readbuffer(6 downto 0) & '0';
 					end if;
+					bitcount := 0;
+					isfirstbyte := true;
+					state := transfer;
 				when transfer =>
 					if bitcount<7 then
-						writebuffer := writebuffer(5 downto 0) & sda_on_rising_scl;
 						bitcount := bitcount+1;
 						if readmode then
-							SDA <= readbuffer(7);
+							out_sda := readbuffer(7);
 							readbuffer := readbuffer(6 downto 0) & '0';
+						else
+							writebuffer := writebuffer(6 downto 0) & SDA_DEGLITCH;
 						end if;
 					else
-						if isfirstbyte and not readmode then
-							index := to_integer(signed(writebuffer & sda_on_rising_scl));
-						else
+						if readmode then -- master is reading with index auto-increment
 							index := index+1;
-						end if;
-						if not readmode then
-							SDA <= '0';  -- ack when writing to slave
+						else  -- master is writing to slave
+							if isfirstbyte then 
+								index := to_integer(unsigned(writebuffer & SDA_DEGLITCH));
+							end if;
+							out_sda := '0';  -- ack after each byte
 						end if;
 						isfirstbyte := false;
-						state := ack;
+						state := acktrans;
 					end if;				
+				when acktrans =>
+					if readmode then
+						if SDA_DEGLITCH='1' then	-- host did not ack the data - that means end of transmission
+							state := idle;
+						else
+							readbuffer := std_logic_vector(to_unsigned(edid(index), 8));
+							out_sda := readbuffer(7);
+							readbuffer := readbuffer(6 downto 0) & '0';
+						end if;
+					end if;
+					bitcount := 0;
+					state := transfer;
 				when others =>
 				end case;			
+			end if;
+		end if;
+		if falling_edge(SCL_DEGLITCH) then
+			if out_sda='0' then
+				SDA <= '0';
+			else
+				SDA <= 'Z';
 			end if;
 		end if;
 	end process;
