@@ -6,7 +6,7 @@ use machxo2.all;
 
 entity HDMIDecoder is	
 	port (
-		C          : in std_logic;
+		C          : in std_logic;  
 		D0         : in std_logic;		
 		D1         : in std_logic;
 		D2         : in std_logic;
@@ -45,14 +45,15 @@ function make_checksums (edid : in Tedid) return Tedid is
     return res;
   end;
 
--- PLL outputs 2 clocks: 
--- pass-through pixel input clock ()
--- 10x bit clock 
+-- PLL outputs 4 clocks with 45, 90, 135 phase shift
 component PLLHDMI is
     port (
         CLKI: in  std_logic;    -- 25.175 MHz
-        CLKOP: out  std_logic;  -- 25.175 MHz direct pass-through
-        CLKOS: out  std_logic); -- 255.175 MHz bit clock
+        CLKOP: out  std_logic;  -- 251.75 MHz 
+        CLKOS: out  std_logic;  -- 251.75 MHz, 45 degrees shifted
+        CLKOS2: out  std_logic; -- 251.75 MHz, 90 degrees shifted
+        CLKOS3: out  std_logic  -- 251.75 MHz, 135 degrees shifted
+	);
 end component;
 
 COMPONENT OSCH
@@ -64,122 +65,321 @@ COMPONENT OSCH
 	);
 END COMPONENT;
 
+component StreamDecoder is	
+	port (
+		PIXELCLOCK : in std_logic;
+		BITCLOCK0  : in std_logic;
+		BITCLOCK1  : in std_logic;
+		BITCLOCK2  : in std_logic;
+		BITCLOCK3  : in std_logic;
+		
+		STREAM     : in std_logic;  
+		
+		DE         : out std_logic;
+		DATA       : out std_logic_vector(3 downto 0);
+		SYNCED     : out std_logic
+	);	
+end component;
 
-signal CLK:std_logic;
-signal CLKFAST:std_logic;
+component ram_dual is
+	generic
+	(
+		data_width : integer := 8;
+		addr_width : integer := 16;
+		numwords   : integer := 2**16
+	); 
+	port 
+	(
+		data	: in std_logic_vector(data_width-1 downto 0);
+		raddr	: in std_logic_vector(addr_width-1 downto 0);
+		waddr	: in std_logic_vector(addr_width-1 downto 0);
+		we		: in std_logic := '1';
+		rclk	: in std_logic;
+		wclk	: in std_logic;
+		q		: out std_logic_vector(data_width-1 downto 0)
+	);	
+end component;
 
-signal TESTCLK:std_logic;  
+
+signal BITCLOCK0:std_logic;
+signal BITCLOCK1:std_logic;
+signal BITCLOCK2:std_logic;
+signal BITCLOCK3:std_logic;
+
+signal DE0:std_logic;
+signal DE1:std_logic;
+signal DE2:std_logic;
+signal DATA0:std_logic_vector(3 downto 0);
+signal DATA1:std_logic_vector(3 downto 0);
+signal DATA2:std_logic_vector(3 downto 0);
+signal WADDRESS0:std_logic_vector(11 downto 0);
+signal WADDRESS1:std_logic_vector(11 downto 0);
+signal WADDRESS2:std_logic_vector(11 downto 0);
+signal RADDRESS:std_logic_vector(11 downto 0);
+signal RDATA:std_logic_vector(11 downto 0);
+
+signal OSC:std_logic;  
 signal SDA_DEGLITCH:std_logic;
 signal SCL_DEGLITCH:std_logic;
 
 begin
 	pll: PLLHDMI
-	PORT MAP ( CLKI => C, CLKOP => CLK, CLKOS => CLKFAST );
+	PORT MAP ( CLKI => C, CLKOP => BITCLOCK0, CLKOS => BITCLOCK1, CLKOS2 => BITCLOCK2, CLKOS3 => BITCLOCK3 );
 	
 	OSCInst0: OSCH
 	GENERIC MAP( NOM_FREQ => "26.6" )
 	PORT MAP ( 
-		STDBY=> '0', OSC => TESTCLK,	SEDSTDBY => open 
+		STDBY=> '0', OSC => OSC,	SEDSTDBY => open 
 	);
+	
+	Dec0:StreamDecoder
+	PORT MAP (
+		PIXELCLOCK => C,
+		BITCLOCK0  => BITCLOCK0, 
+		BITCLOCK1  => BITCLOCK1,
+		BITCLOCK2  => BITCLOCK2,
+		BITCLOCK3  => BITCLOCK3,
+		STREAM     => D0,  		
+		DE         => DE0,
+		DATA       => DATA0,
+		SYNCED     => open
+	);
+	Dec1:StreamDecoder
+	PORT MAP (
+		PIXELCLOCK => C,
+		BITCLOCK0  => BITCLOCK0, 
+		BITCLOCK1  => BITCLOCK1,
+		BITCLOCK2  => BITCLOCK2,
+		BITCLOCK3  => BITCLOCK3,
+		STREAM     => D1,  		
+		DE         => DE1,
+		DATA       => DATA1,
+		SYNCED     => open
+	);
+	Dec2:StreamDecoder
+	PORT MAP (
+		PIXELCLOCK => C,
+		BITCLOCK0  => BITCLOCK0, 
+		BITCLOCK1  => BITCLOCK1,
+		BITCLOCK2  => BITCLOCK2,
+		BITCLOCK3  => BITCLOCK3,
+		STREAM     => D2,  		
+		DE         => DE2,
+		DATA       => DATA2,
+		SYNCED     => open
+	);
+	RAM0: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
+		port map (
+			DATA0, 
+			RADDRESS,
+			WADDRESS0,
+			'1',
+			C,
+			C,
+			RDATA(3 downto 0)    -- blue bits
+		);
+	RAM1: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
+		port map (
+			DATA1, 
+			RADDRESS,
+			WADDRESS1,
+			'1',
+			C,
+			C,
+			RDATA(7 downto 4)    -- green bits
+		);
+	RAM2: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
+		port map (
+			DATA2, 
+			RADDRESS,
+			WADDRESS2,
+			'1',
+			C,
+			C,
+			RDATA(11 downto 8)   -- red bits
+		);
 
-	process (CLK,CLKFAST)	
-	variable r:std_logic_vector(9 downto 0);
-	variable g:std_logic_vector(9 downto 0);
-	variable b:std_logic_vector(9 downto 0);
-	variable bits:std_logic_vector(29 downto 0);
+
+	-- orchestrate data transfer
+	process (C)	
+	subtype i13 is integer range 0 to 4095;
+	type i13a is array (0 to 2) of i13;
+	variable writecounter:i13a;
+	variable readcounter:i13;
+	variable inactivecounter:i13a;
+	variable in_x:i13a;
+	variable in_y:i13a;
+	constant totaloutwidth:integer := 491;
+	variable out_phase:integer range 0 to 3;
+	variable out_x:integer range 0 to 511;
+	variable out_y:integer range 0 to 511;
+	variable tmpde:std_logic_vector(2 downto 0);
 	begin
-		if rising_edge(CLKFAST) then
-			r := r(8 downto 0) & D0;
-			g := g(8 downto 0) & D1;
-			b := b(8 downto 0) & D2;
-		end if;
-		if rising_edge(CLK) then
-			DUMMY <= bits(29) xor bits(28) xor bits(27) xor bits(26) xor bits(25) xor bits(24) xor bits(23) xor bits(22) xor bits(21) xor bits(20)
-			    xor bits(19) xor bits(18) xor bits(17) xor bits(16) xor bits(15) xor bits(14) xor bits(13) xor bits(12) xor bits(11) xor bits(10)
-				xor bits(9) xor bits(8) xor bits(7) xor bits(6) xor bits(5) xor bits(4) xor bits(3) xor bits(2) xor bits(1) xor bits(0);
-			bits := r & g & b;
-		end if;
-	end process;
-	
-	
-	process (TESTCLK)
-	variable phase : integer range 0 to 3 := 0;
-	variable x : integer range 0 to 1024 := 0;
-	variable y : integer range 0 to 255 := 0;
-	variable frame : integer range 0 to 255;
-	variable rgb:std_logic_vector(11 downto 0);
-	begin
-		if rising_edge(TESTCLK) then
-			-- generate picture
-			rgb := "000000000000";
-			if x<320 and y<256 then
-				if x<256 then
-					rgb(11 downto 8) := std_logic_vector(to_unsigned(x/16, 4));
-					rgb(7 downto 4)  := std_logic_vector(to_unsigned(y/16, 4));
-				else
-					rgb(11 downto 8) := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-					rgb(7 downto 4)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-					rgb(3 downto 0)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-				end if;
-			end if;	
-			-- generate output signals
-			if x<320 then
-				if phase<=1 then
-					CLK_BIT <= '1';
-					R_BIT <= rgb(11 downto 10);
-					G_BIT <= rgb(7 downto 6);
-					B_BIT <= rgb(3 downto 2);
-				else 
-					CLK_BIT <= '0';
-					R_BIT <= rgb(9 downto 8);
-					G_BIT <= rgb(5 downto 4);
-					B_BIT <= rgb(1 downto 0);
-				end if;			
+		if rising_edge(C) then
+			-- send output data from the buffer (synchronized to input channel 0)
+			if in_x(0)=4 and in_y(0)=0 then
+				out_phase := 0;
+				out_x := 0;
+				out_y := 0;
+				readcounter := 0;
 			else
-				if x<340 and phase<=1 then
+				if out_x<340 and out_y<256 and (out_phase=1 or out_phase=2) then
 					CLK_BIT <= '1';
 				else
 					CLK_BIT <= '0';
-				end if;
-				if y=0 then
-					R_BIT <= "00";
-					G_BIT <= "00";
-					B_BIT <= "00";
+				end if;	
+				if out_x>320 then
+					if out_y = 0 then
+						R_BIT <= "00";
+						G_BIT <= "00";
+						B_BIT <= "00";
+					else
+						R_BIT <= "11";
+						G_BIT <= "11";
+						B_BIT <= "11";
+					end if;
+				elsif out_phase=1 then
+					R_BIT <= RDATA(11 downto 10);
+					G_BIT <= RDATA(7 downto 6);
+					B_BIT <= RDATA(3 downto 2);
+				elsif out_phase=3 then
+					R_BIT <= RDATA(9 downto 8);
+					G_BIT <= RDATA(5 downto 4);
+					B_BIT <= RDATA(1 downto 0);
+				end if;		
+				if out_phase<3 then
+					out_phase := out_phase+1;
 				else
-					R_BIT <= "11";
-					G_BIT <= "11";
-					B_BIT <= "11";
+					out_phase:=0;
+					if out_x<totaloutwidth-1 then
+						out_x := out_x+1;
+					else
+						out_x := 0;
+						if out_y<511 then
+							out_y := out_y+1;
+						end if;
+					end if;
+					if out_x<320 and out_y<256 then
+						readcounter:=readcounter+1;
+					end if;					
 				end if;
 			end if;
-			-- progress counters
-			if phase<3 then
-				phase:=phase+1;
-			else
-				phase := 0;
-				if x<530-1 then
-					x := x+1;
-				else 
-					x := 0;
-					if y<256-1 then
-						y := y+1;
-					else 
-						y := 0;
-						frame := (frame+1) mod 256;
+		
+			-- monitor changes in the DE values and progress addresses and counters for input
+			tmpde := DE2 & DE1 & DE0;
+			for i in 0 to 2 loop 
+				if tmpde(i)='1' then  -- data available
+					if inactivecounter(i)>4000 then    -- end of vertial blanking
+						in_x(i) := 0;
+						in_y(i) := 0;
+					elsif inactivecounter(i)>100 then  -- end of horizontal blanking
+						in_x(i) := 0;
+						in_y(i) := in_y(i)+1;
+					else
+						in_x(i) := in_x(i)+1;
+						if (in_y(i) mod 2)=0 and in_x(i)>=40 and in_x(i)<680 and (in_x(i) mod 2)=0 then
+							writecounter(i):=writecounter(i)+1;
+						end if;
+					end if;				
+					inactivecounter(i) := 0;					
+				else
+					if inactivecounter(i)>4000 then
+						writecounter(i) := 0;
+					end if;
+					if inactivecounter(i)<4095 then
+						inactivecounter(i) := inactivecounter(i)+1;
 					end if;
 				end if;
-			end if;
+			end loop;			
 		end if;
+		
+		WADDRESS0 <= std_logic_vector(to_unsigned(writecounter(0), 12));
+		WADDRESS1 <= std_logic_vector(to_unsigned(writecounter(1), 12));
+		WADDRESS2 <= std_logic_vector(to_unsigned(writecounter(2), 12));
+		RADDRESS <= std_logic_vector(to_unsigned(readcounter, 12));
+		
+		DUMMY <= '0';
 	end process;
+	
+	
+	--process (OSC)
+	--variable phase : integer range 0 to 3 := 0;
+	--variable x : integer range 0 to 1024 := 0;
+	--variable y : integer range 0 to 255 := 0;
+	--variable frame : integer range 0 to 255;
+	--variable rgb:std_logic_vector(11 downto 0);
+	--begin
+		--if rising_edge(OSC) then
+			---- generate picture
+			--rgb := "000000000000";
+			--if x<320 and y<256 then
+				--if x<256 then
+					--rgb(11 downto 8) := std_logic_vector(to_unsigned(x/16, 4));
+					--rgb(7 downto 4)  := std_logic_vector(to_unsigned(y/16, 4));
+				--else
+					--rgb(11 downto 8) := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
+					--rgb(7 downto 4)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
+					--rgb(3 downto 0)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
+				--end if;
+			--end if;	
+			---- generate output signals
+			--if x<320 then
+				--if phase<=1 then
+----					CLK_BIT <= '1';
+					--R_BIT <= rgb(11 downto 10);
+					--G_BIT <= rgb(7 downto 6);
+					--B_BIT <= rgb(3 downto 2);
+				--else 
+----					CLK_BIT <= '0';
+					--R_BIT <= rgb(9 downto 8);
+					--G_BIT <= rgb(5 downto 4);
+					--B_BIT <= rgb(1 downto 0);
+				--end if;			
+			--else
+				--if x<340 and phase<=1 then
+----					CLK_BIT <= '1';
+				--else
+----					CLK_BIT <= '0';
+				--end if;
+				--if y=0 then
+					--R_BIT <= "00";
+					--G_BIT <= "00";
+					--B_BIT <= "00";
+				--else
+					--R_BIT <= "11";
+					--G_BIT <= "11";
+					--B_BIT <= "11";
+				--end if;
+			--end if;
+			---- progress counters
+			--if phase<3 then
+				--phase:=phase+1;
+			--else
+				--phase := 0;
+				--if x<530-1 then
+					--x := x+1;
+				--else 
+					--x := 0;
+					--if y<256-1 then
+						--y := y+1;
+					--else 
+						--y := 0;
+						--frame := (frame+1) mod 256;
+					--end if;
+				--end if;
+			--end if;
+		--end if;
+	--end process;
 
 
 
 	-- de-glitch the SDA
-	process (TESTCLK)
+	process (OSC)
 	variable locktime:integer range 0 to 15 := 0;
 	variable value:std_logic := '1';
 	variable newvalue:std_logic := '1';	
 	begin
-		if rising_edge(TESTCLK) then
+		if rising_edge(OSC) then
 			if value/=newvalue then
 				if locktime>0 then
 					locktime:=locktime-1;
@@ -193,12 +393,12 @@ begin
 		SDA_DEGLITCH <= value;
 	end process;
 	-- de-glitch the SCL
-	process (TESTCLK)
+	process (OSC)
 	variable locktime:integer range 0 to 15 := 0;
 	variable value:std_logic := '1';
 	variable newvalue:std_logic := '1';
 	begin
-		if rising_edge(TESTCLK) then
+		if rising_edge(OSC) then
 			if value/=newvalue then
 				if locktime>0 then
 					locktime:=locktime-1;
@@ -213,18 +413,18 @@ begin
 	end process;
 	
     -- send EDID
-	process (SCL_DEGLITCH,SDA_DEGLITCH,TESTCLK)
-	constant pixelclock:integer := 27000000/10000;
+	process (SCL_DEGLITCH,SDA_DEGLITCH,OSC)
+	constant pixelclock:integer := (25175000+9999)/10000;
 	constant hvisible:integer := 720;
-	constant hfront:integer := 12;
+	constant hfront:integer := 64;
 	constant hsync:integer := 64;
-	constant hback:integer := 68;
+	constant hback:integer := 116;
 	constant hblanking:integer := hfront+hsync+hback;
-	constant hsize_mm:integer := 960;
-	constant vvisible:integer := 576;
-	constant vfront:integer := 5;
-	constant vsync:integer := 5;
-	constant vback:integer := 39;
+	constant hsize_mm:integer := 1080;
+	constant vvisible:integer := 512;
+	constant vfront:integer := 2;
+	constant vsync:integer := 4;
+	constant vback:integer := 4;
 	constant vblanking:integer := vfront+vsync+vback;
 	constant vsize_mm:integer := 768;
 	constant edid_without_sums:Tedid := (
@@ -257,7 +457,7 @@ begin
 		0,                                                                       -- 15
 		0,                                                                       -- 16
 		2#00011000#,                                                             -- 17
-		16#00#,16#00#,16#00#,16#fc#,16#00#,16#48#,16#44#,16#4d#,16#49#,16#32#,16#53#,16#43#,16#41#,16#52#,16#54#,16#0a#,16#20#,16#20#, -- monitor information
+		16#00#,16#00#,16#00#,16#fc#,16#00#,16#4C#,16#45#,16#44#,16#4d#,16#41#,16#54#,16#52#,16#49#,16#58#,16#0a#,16#20#,16#20#,16#20#, -- monitor information
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
 		16#00#,                                                                                                                            -- number of extension blocks
@@ -278,7 +478,7 @@ begin
 	variable isfirstbyte:boolean;
 	variable out_sda:std_logic := '1';
 	begin
-		if rising_edge(TESTCLK) then
+		if rising_edge(OSC) then
 			if sda_history="1111111100000000" then
 				detect_start := scl_history="1111111111111111";
 			elsif scl_history = "0000000011111111" then

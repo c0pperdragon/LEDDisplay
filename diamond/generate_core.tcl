@@ -86,7 +86,7 @@ set Para(FPGAPath) "[file join $Para(install_dir) ispfpga bin $platformpath]"
 
 set scuba "$Para(FPGAPath)/scuba"
 set modulename "PLLHDMI"
-set lang "verilog"
+set lang "vhdl"
 set lpcfile "$Para(sbp_path)/$modulename.lpc"
 set arch "xo2c00"
 set cmd_line [GetCmdLine $lpcfile]

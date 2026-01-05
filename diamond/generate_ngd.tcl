@@ -97,9 +97,7 @@ proc CreateSynprojFile {} {
 
 -lpf 1
 -p $Para(sbp_path)
--ver \"$Para(install_dir)/cae_library/synthesis/verilog/$Para(tech_cae).v\"
-\"$Para(install_dir)/cae_library/synthesis/verilog/pmi_def.v\"
-\"$Para(sbp_path)/$Para(ModuleName).v\"
+-vhd $Para(sbp_path)/$Para(ModuleName).vhd
 -top $Para(ModuleName)
 -ngo \"$Para(sbp_path)/$Para(ModuleName).ngo\"
 		"

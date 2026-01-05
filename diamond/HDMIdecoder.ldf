@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<BaliProject version="3.2" title="HDMIdecoder" device="LCMXO2-1200HC-5SG32C" default_implementation="impl1">
+<BaliProject version="3.2" title="HDMIdecoder" device="LCMXO2-1200HC-4SG32C" default_implementation="impl1">
     <Options/>
-    <Implementation title="impl1" dir="impl1" description="impl1" synthesis="lse" default_strategy="Strategy1">
+    <Implementation title="impl1" dir="impl1" description="impl1" synthesis="lse" default_strategy="Timing">
         <Options def_top="HDMIDecoder"/>
-        <Source name="HDMIdecoder.vhd" type="VHDL" type_short="VHDL">
+        <Source name="source/HDMIdecoder.vhd" type="VHDL" type_short="VHDL">
             <Options top_module="HDMIDecoder"/>
         </Source>
-        <Source name="PLLHDMI.v" type="Verilog" type_short="Verilog">
+        <Source name="source/StreamDecoder.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="PLLHDMI.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="source/ram_dual.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
         <Source name="HDMIdecoder.lpf" type="Logic Preference" type_short="LPF">
