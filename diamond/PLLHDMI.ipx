@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<DiamondModule name="PLLHDMI" module="PLL" VendorName="Lattice Semiconductor Corporation" generator="IPexpress" date="2026 01 04 14:16:31.269" version="5.8" type="Module" synthesis="lse" source_format="VHDL">
+<DiamondModule name="PLLHDMI" module="PLL" VendorName="Lattice Semiconductor Corporation" generator="IPexpress" date="2026 01 07 15:36:32.607" version="5.8" type="Module" synthesis="lse" source_format="VHDL">
   <Package>
-		<File name="PLLHDMI.lpc" type="lpc" modified="2026 01 04 14:16:28.638"/>
+		<File name="PLLHDMI.lpc" type="lpc" modified="2026 01 07 15:36:30.068"/>
 		<File name="PLLHDMI.v" type="top_level_verilog" modified="2025 10 18 23:55:35.876"/>
-		<File name="PLLHDMI.vhd" type="top_level_vhdl" modified="2026 01 04 14:16:28.734"/>
+		<File name="PLLHDMI.vhd" type="top_level_vhdl" modified="2026 01 07 15:36:30.136"/>
 		<File name="PLLHDMI_tmpl.v" type="template_verilog" modified="2025 10 18 23:55:35.877"/>
-		<File name="PLLHDMI_tmpl.vhd" type="template_vhdl" modified="2026 01 04 14:16:28.735"/>
+		<File name="PLLHDMI_tmpl.vhd" type="template_vhdl" modified="2026 01 07 15:36:30.137"/>
   </Package>
 </DiamondModule>

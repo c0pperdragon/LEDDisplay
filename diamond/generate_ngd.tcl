@@ -59,7 +59,7 @@ set Para(PartType) "LCMXO2-1200HC"
 set Para(tech_syn) machxo2
 set Para(tech_cae) machxo2
 set Para(Package) "QFN32"
-set Para(SpeedGrade) "5"
+set Para(SpeedGrade) "4"
 set Para(FMax) "100"
 set fdcfile "$Para(sbp_path)/$Para(ModuleName).fdc"
 

@@ -48,11 +48,11 @@ function make_checksums (edid : in Tedid) return Tedid is
 -- PLL outputs 4 clocks with 45, 90, 135 phase shift
 component PLLHDMI is
     port (
-        CLKI: in  std_logic;    -- 25.175 MHz
-        CLKOP: out  std_logic;  -- 251.75 MHz 
-        CLKOS: out  std_logic;  -- 251.75 MHz, 45 degrees shifted
-        CLKOS2: out  std_logic; -- 251.75 MHz, 90 degrees shifted
-        CLKOS3: out  std_logic  -- 251.75 MHz, 135 degrees shifted
+        CLKI: in  std_logic;    -- 25.35 MHz
+        CLKOP: out  std_logic;  -- 253.5 MHz 
+        CLKOS: out  std_logic;  -- 253.5 MHz, 45 degrees shifted
+        CLKOS2: out  std_logic; -- 253.5 MHz, 90 degrees shifted
+        CLKOS3: out  std_logic  -- 253.5 MHz, 135 degrees shifted
 	);
 end component;
 
@@ -209,7 +209,7 @@ begin
 	variable inactivecounter:i13a;
 	variable in_x:i13a;
 	variable in_y:i13a;
-	constant totaloutwidth:integer := 491;
+	constant totaloutwidth:integer := ((960*528)/4) / 256;
 	variable out_phase:integer range 0 to 3;
 	variable out_x:integer range 0 to 511;
 	variable out_y:integer range 0 to 511;
@@ -414,17 +414,17 @@ begin
 	
     -- send EDID
 	process (SCL_DEGLITCH,SDA_DEGLITCH,OSC)
-	constant pixelclock:integer := (25175000+9999)/10000;
+	constant pixelclock:integer := 25350000/10000;
 	constant hvisible:integer := 720;
 	constant hfront:integer := 64;
 	constant hsync:integer := 64;
-	constant hback:integer := 116;
+	constant hback:integer := 112;
 	constant hblanking:integer := hfront+hsync+hback;
 	constant hsize_mm:integer := 1080;
 	constant vvisible:integer := 512;
-	constant vfront:integer := 2;
+	constant vfront:integer := 4;
 	constant vsync:integer := 4;
-	constant vback:integer := 4;
+	constant vback:integer := 8;
 	constant vblanking:integer := vfront+vsync+vback;
 	constant vsize_mm:integer := 768;
 	constant edid_without_sums:Tedid := (
