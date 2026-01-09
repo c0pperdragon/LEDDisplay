@@ -227,7 +227,7 @@ void setup()
       &c,
       readlinebuffer,      
       &pioin->rxf[0],      // Read address (only need to set this once)
-      384/2,               // always write 384 pixels (16 bit per pixel), no matter if they will be used
+      384/2,               // always read 384 pixels (16 bit per pixel), no matter if they will be used
       true                 // Start immediately, waiting for data
     );
   }
@@ -258,7 +258,7 @@ void lineFinishInterrupt()
     // Start dma to output the pixels of all the rows of current segment 
     dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*segment, true);
 
-    // check if this was the last row for the whole screen
+    // check if this was the last row of the whole screen
     if (digitalRead(PIN_DATA)==LOW)
     {
       currentreadbuffer = 0;

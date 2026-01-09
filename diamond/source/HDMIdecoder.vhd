@@ -220,28 +220,28 @@ begin
 		if rising_edge(C) then
 			-- generate signals according to counters
 			if out_x<400 and (out_phase=1 or out_phase=2) then
-				CLK_BIT <= '1';
+--				CLK_BIT <= '1';
 			else
-				CLK_BIT <= '0';
+--				CLK_BIT <= '0';
 			end if;	
 			if out_x>=384 then
 				if out_y = 255 then
-					R_BIT <= "00";
-					G_BIT <= "00";
-					B_BIT <= "00";
+--					R_BIT <= "00";
+--					G_BIT <= "00";
+--					B_BIT <= "00";
 				else
-					R_BIT <= "11";
-					G_BIT <= "11";
-					B_BIT <= "11";
+--					R_BIT <= "11";
+--					G_BIT <= "11";
+--					B_BIT <= "11";
 				end if;
 			elsif out_phase=1 then
-				R_BIT <= RDATA(11 downto 10);
-				G_BIT <= RDATA(7 downto 6);
-				B_BIT <= RDATA(3 downto 2);
+--				R_BIT <= RDATA(11 downto 10);
+--				G_BIT <= RDATA(7 downto 6);
+--				B_BIT <= RDATA(3 downto 2);
 			elsif out_phase=3 then
-				R_BIT <= RDATA(9 downto 8);
-				G_BIT <= RDATA(5 downto 4);
-				B_BIT <= RDATA(1 downto 0);
+--				R_BIT <= RDATA(9 downto 8);
+--				G_BIT <= RDATA(5 downto 4);
+--				B_BIT <= RDATA(1 downto 0);
 			end if;		
 		
 			-- start output synchronized to the input channel 0
@@ -311,74 +311,88 @@ begin
 	end process;
 	
 	
-	--process (OSC)
-	--variable phase : integer range 0 to 3 := 0;
-	--variable x : integer range 0 to 1024 := 0;
-	--variable y : integer range 0 to 255 := 0;
-	--variable frame : integer range 0 to 255;
-	--variable rgb:std_logic_vector(11 downto 0);
-	--begin
-		--if rising_edge(OSC) then
-			---- generate picture
-			--rgb := "000000000000";
-			--if x<320 and y<256 then
-				--if x<256 then
-					--rgb(11 downto 8) := std_logic_vector(to_unsigned(x/16, 4));
-					--rgb(7 downto 4)  := std_logic_vector(to_unsigned(y/16, 4));
-				--else
-					--rgb(11 downto 8) := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-					--rgb(7 downto 4)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-					--rgb(3 downto 0)  := std_logic_vector(to_unsigned( (x+frame)mod 16, 4));
-				--end if;
-			--end if;	
-			---- generate output signals
-			--if x<320 then
-				--if phase<=1 then
-----					CLK_BIT <= '1';
-					--R_BIT <= rgb(11 downto 10);
-					--G_BIT <= rgb(7 downto 6);
-					--B_BIT <= rgb(3 downto 2);
-				--else 
-----					CLK_BIT <= '0';
-					--R_BIT <= rgb(9 downto 8);
-					--G_BIT <= rgb(5 downto 4);
-					--B_BIT <= rgb(1 downto 0);
-				--end if;			
-			--else
-				--if x<340 and phase<=1 then
-----					CLK_BIT <= '1';
-				--else
-----					CLK_BIT <= '0';
-				--end if;
-				--if y=0 then
-					--R_BIT <= "00";
-					--G_BIT <= "00";
-					--B_BIT <= "00";
-				--else
-					--R_BIT <= "11";
-					--G_BIT <= "11";
-					--B_BIT <= "11";
-				--end if;
-			--end if;
-			---- progress counters
-			--if phase<3 then
-				--phase:=phase+1;
-			--else
-				--phase := 0;
-				--if x<530-1 then
-					--x := x+1;
-				--else 
-					--x := 0;
-					--if y<256-1 then
-						--y := y+1;
-					--else 
-						--y := 0;
-						--frame := (frame+1) mod 256;
-					--end if;
-				--end if;
-			--end if;
-		--end if;
-	--end process;
+	process (OSC)
+	variable phase : integer range 0 to 3 := 0;
+	variable x : integer range 0 to 1024 := 0;
+	variable y : integer range 0 to 255 := 0;
+	variable frame : integer range 0 to 255;
+	variable px : integer range 0 to 1024 := 0;
+	variable py : integer range 0 to 511 := 0;
+	variable rgb:std_logic_vector(11 downto 0);
+	begin
+		if rising_edge(OSC) then
+			-- generate picture
+			rgb := "000000000000";
+			if px<320 and py<256 then
+				if px<256 then
+					rgb(11 downto 8) := std_logic_vector(to_unsigned(px/16, 4));
+					rgb(7 downto 4)  := std_logic_vector(to_unsigned(py/16, 4));
+				else
+					rgb(11 downto 8) := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
+					rgb(7 downto 4)  := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
+					rgb(3 downto 0)  := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
+				end if;
+			end if;	
+			-- generate output signals
+			if x<384 then
+				if phase<=1 then
+					CLK_BIT <= '1';
+					R_BIT <= rgb(11 downto 10);
+					G_BIT <= rgb(7 downto 6);
+					B_BIT <= rgb(3 downto 2);
+				else 
+					CLK_BIT <= '0';
+					R_BIT <= rgb(9 downto 8);
+					G_BIT <= rgb(5 downto 4);
+					B_BIT <= rgb(1 downto 0);
+				end if;			
+			else
+				if x<400 and phase<=1 then
+					CLK_BIT <= '1';
+				else
+					CLK_BIT <= '0';
+				end if;
+				if y=255 then
+					R_BIT <= "00";
+					G_BIT <= "00";
+					B_BIT <= "00";
+				else
+					R_BIT <= "11";
+					G_BIT <= "11";
+					B_BIT <= "11";
+				end if;
+			end if;
+			-- progress counters
+			if phase<3 then
+				phase:=phase+1;
+			else
+				phase := 0;
+				
+				if x<384 then
+					if px<320-1 then
+						px := px+1;
+					else
+						px := 0;
+						py := py+1;
+					end if;
+				end if;
+				
+				if x<528-1 then
+					x := x+1;
+				else 
+					x := 0;
+					if y<256-1 then
+						y := y+1;
+					else 
+						y := 0;
+						frame := (frame+1) mod 256;						
+						px := 0;
+						py := 0;
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
 
 
 
