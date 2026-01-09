@@ -33,9 +33,9 @@ int in_dma;      //dma for pixel data receiver
 int top = 0;                // first line of whole screen to be shown by this program
 
 int currentTotalLine = 0;   // line number of the original whole screen
-uint32_t screenbuffer[SCREENBUFFER_LEN];
+uint32_t screenbuffer[SCREENBUFFER_LEN];  // screen buffer to drive output 
 int currentreadbuffer = 0;
-uint32_t readlinebuffer[2*160];  // hold two lines of input data - is used alternately to avoid access conflicts
+uint32_t readlinebuffer[60*(384/2)];   // hold 60 blocks of input data, which is enough for 72 lines
 int row_latch; // what is currently latched in the external counter
 
 // Use the CPU to rearrange the incomming data from a pixel-by pixel format to the
@@ -153,7 +153,7 @@ void setup()
   // startup values for various counters
   memset(screenbuffer, 0, SCREENBUFFER_LEN*4);
 //  drawDemoImage();
-  currentTotalLine = -1;
+  currentTotalLine = 0;
   currentreadbuffer = 0;
 
   //Setup pio block and state machines for driving the LEDs
@@ -227,7 +227,7 @@ void setup()
       &c,
       readlinebuffer,      
       &pioin->rxf[0],      // Read address (only need to set this once)
-      160,                 // always write 320 pixels (16 bit per pixel)
+      384/2,               // always write 384 pixels (16 bit per pixel), no matter if they will be used
       true                 // Start immediately, waiting for data
     );
   }
@@ -249,45 +249,41 @@ void setup()
 }
 
 void lineFinishInterrupt()
-{
-    // immediately prepare dma to read the next line
-    dma_channel_set_write_addr(in_dma, readlinebuffer+160*(1-currentreadbuffer), true);
+{ 
+    // which line was triggered by FPGA recently
+    int prevTotalLine=currentTotalLine;
+    // which rows to show next to have very small delay, but still avoid access conflict
+    int segment = ((currentTotalLine+28)%32);
 
-    // detect input frame start or progress line
+    // Start dma to output the pixels of all the rows of current segment 
+    dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*segment, true);
+
+    // check if this was the last row for the whole screen
     if (digitalRead(PIN_DATA)==LOW)
     {
-      currentTotalLine=0;
-    }
-    else if (currentTotalLine>=0)
-    {
-      currentTotalLine++;
+      currentreadbuffer = 0;
+      currentTotalLine = 0;
     }
     else
     {
-      return;
+      currentreadbuffer = (currentreadbuffer+1) % 60;
+      currentTotalLine++;
     }
 
-    // which rows to show next to have small delay, but avoid access conflict
-    int row = ((currentTotalLine+29)%32);
-
-    // Start dma to output the pixels of the row 
-    dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*row, true);
+    // already prepare dma to read the next data block
+    dma_channel_set_write_addr(in_dma, readlinebuffer+(currentreadbuffer*(384/2)), true);
 
     // Wait until the lowest bit of the previous line was surely completely shown (with OE low)
     busy_wait_us_32(3);
 
     // progress row selectors before most significant bit of this row becomes visible
-    updateRowLatch(row);
+    updateRowLatch(segment);
 
-    // decode the currently read line 
-    if (currentTotalLine>=top && currentTotalLine<top+128)
+    // decode the previously triggered line (data block alignment is different to line alignment)
+    if (prevTotalLine>=top && prevTotalLine<top+128)
     {
-      digitalWrite(PIN_DEBUG, HIGH);
-      distributeLineData(currentTotalLine-top, readlinebuffer+(160*currentreadbuffer));
-      digitalWrite(PIN_DEBUG, LOW);
+      distributeLineData(prevTotalLine-top, readlinebuffer+(320/2)*(prevTotalLine%72) );
     }
-    // switch buffers
-    currentreadbuffer = 1-currentreadbuffer;
 }
 
 

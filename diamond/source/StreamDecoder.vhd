@@ -36,6 +36,8 @@ begin
 	variable g:std_logic_vector(8 downto 0);
 	variable h:std_logic_vector(8 downto 0);
 	variable selectedqueue:integer range 0 to 7; -- clocked by BITCLOCK0
+	variable v:std_logic_vector(3 downto 0);
+	variable w:std_logic_vector(1 downto 0);
 	variable x:std_logic_vector(18 downto 0);    -- clocked by BITCLOCK0
 	variable y:std_logic_vector(18 downto 0);    -- clocked by PIXELCLOCK
 	variable bits:std_logic_vector(9 downto 0);  -- clocked by PIXELCLOCK
@@ -48,20 +50,20 @@ begin
 	begin
 		if rising_edge(PIXELCLOCK) then
 			-- check behaviour of detecting the special symbols - need to tune to correct phase
-			-- in any 2000 pixel range, there must be at least one continous stretch of 200 non-de pixels
+			-- in any 2000 pixel range, there must be at least one continous stretch of 140 non-de pixels
 			progressphase := false;
 			if count_testpixel<2000 then
 				count_testpixel := count_testpixel+1;
 				if de_out='1' then
 					count_non_de := 0;
-				elsif count_non_de<200 then
+				elsif count_non_de<255 then
 					count_non_de := count_non_de+1;
 					if count_non_de > max_non_de then
 						max_non_de := count_non_de;
 					end if;
 				end if;
 			else
-				if max_non_de<200 then
+				if max_non_de<140 then
 					progressphase := true;
 				end if;			
 				count_testpixel := 0;
@@ -115,17 +117,17 @@ begin
 		-- processing on earliest clock
 		if rising_edge(BITCLOCK0) then 
 			-- fetch from queue as specified by fine phase			
-			x(17 downto 0) := x(18 downto 1);
-			case selectedqueue is
-			when 0 => x(18) := a(0);
-			when 1 => x(18) := b(0);
-			when 2 => x(18) := c(0);
-			when 3 => x(18) := d(0);
-			when 4 => x(18) := e(0);
-			when 5 => x(18) := f(0);
-			when 6 => x(18) := g(0);
-			when others => x(18) := h(0);
-			end case;
+			x(18 downto 0) := w(selectedqueue mod 2) & x(18 downto 1);
+			if (selectedqueue mod 4)<2 then 
+				w := v(1 downto 0);
+			else
+				w := v(3 downto 2);
+			end if;
+			if selectedqueue<4 then
+				v := d(0) & c(0) & b(0) & a(0);
+			else
+				v := h(0) & g(0) & f(0) & e(0);
+			end if;
 			-- move bits through various queues at this clock
 			a(8 downto 0) := STREAM & a(8 downto 1);
 			b(0) := b(1);

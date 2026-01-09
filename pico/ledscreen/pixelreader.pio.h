@@ -17,7 +17,7 @@
 
 static const uint16_t pixelreader_program_instructions[] = {
             //     .wrap_target
-    0xe033, //  0: set    x, 19                      
+    0xe037, //  0: set    x, 23                      
     0xa0c1, //  1: mov    isr, x                     
     0xe02f, //  2: set    x, 15                      
     0x4024, //  3: in     x, 4                       

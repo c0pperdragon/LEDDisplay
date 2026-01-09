@@ -13,7 +13,7 @@
 
 .program pixelreader
 .wrap_target
-    set x 0x13                 ; construct number 319 = $13F in Y
+    set x 0x17                 ; construct number 383 = $17F in Y
 	mov isr x                  ; to make this work, need to have set direction to left
     set x 0xf
 	in x 4

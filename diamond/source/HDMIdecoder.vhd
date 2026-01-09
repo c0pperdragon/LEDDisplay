@@ -209,59 +209,68 @@ begin
 	variable inactivecounter:i13a;
 	variable in_x:i13a;
 	variable in_y:i13a;
-	constant totaloutwidth:integer := ((960*528)/4) / 256;
 	variable out_phase:integer range 0 to 3;
-	variable out_x:integer range 0 to 511;
-	variable out_y:integer range 0 to 511;
+	variable out_x:integer range 0 to 1023;
+	variable out_y:integer range 0 to 1023;
+	variable accu:integer range 0 to 32767 := 0;
+	constant accu_inc:integer := 8;
+	constant accu_dec:integer := 16875-accu_inc;
 	variable tmpde:std_logic_vector(2 downto 0);
 	begin
 		if rising_edge(C) then
-			-- send output data from the buffer (synchronized to input channel 0)
-			if in_x(0)=4 and in_y(0)=0 then
+			-- generate signals according to counters
+			if out_x<400 and (out_phase=1 or out_phase=2) then
+				CLK_BIT <= '1';
+			else
+				CLK_BIT <= '0';
+			end if;	
+			if out_x>=384 then
+				if out_y = 255 then
+					R_BIT <= "00";
+					G_BIT <= "00";
+					B_BIT <= "00";
+				else
+					R_BIT <= "11";
+					G_BIT <= "11";
+					B_BIT <= "11";
+				end if;
+			elsif out_phase=1 then
+				R_BIT <= RDATA(11 downto 10);
+				G_BIT <= RDATA(7 downto 6);
+				B_BIT <= RDATA(3 downto 2);
+			elsif out_phase=3 then
+				R_BIT <= RDATA(9 downto 8);
+				G_BIT <= RDATA(5 downto 4);
+				B_BIT <= RDATA(1 downto 0);
+			end if;		
+		
+			-- start output synchronized to the input channel 0
+			if in_x(0)=2 and in_y(0)=2 then
 				out_phase := 0;
 				out_x := 0;
 				out_y := 0;
+				accu := 0;
 				readcounter := 0;
+			-- do a bresenheim algorithm to get the trigger frequency of output lines as perfect as possible
+			elsif accu >= accu_dec then		
+				accu := accu - accu_dec;
+				out_phase := 0;
+				out_x := 0;
+				out_y := out_y+1;	
+			-- progress counters normally  
 			else
-				if out_x<340 and out_y<256 and (out_phase=1 or out_phase=2) then
-					CLK_BIT <= '1';
-				else
-					CLK_BIT <= '0';
-				end if;	
-				if out_x>320 then
-					if out_y = 0 then
-						R_BIT <= "00";
-						G_BIT <= "00";
-						B_BIT <= "00";
-					else
-						R_BIT <= "11";
-						G_BIT <= "11";
-						B_BIT <= "11";
-					end if;
-				elsif out_phase=1 then
-					R_BIT <= RDATA(11 downto 10);
-					G_BIT <= RDATA(7 downto 6);
-					B_BIT <= RDATA(3 downto 2);
-				elsif out_phase=3 then
-					R_BIT <= RDATA(9 downto 8);
-					G_BIT <= RDATA(5 downto 4);
-					B_BIT <= RDATA(1 downto 0);
-				end if;		
+				accu := accu+accu_inc;
+			
 				if out_phase<3 then
 					out_phase := out_phase+1;
 				else
 					out_phase:=0;
-					if out_x<totaloutwidth-1 then
-						out_x := out_x+1;
-					else
-						out_x := 0;
-						if out_y<511 then
-							out_y := out_y+1;
-						end if;
-					end if;
-					if out_x<320 and out_y<256 then
+					if out_x<384 then
 						readcounter:=readcounter+1;
 					end if;					
+					if out_x<1023 then
+						out_x := out_x+1;
+					end if;
 				end if;
 			end if;
 		
@@ -276,10 +285,10 @@ begin
 						in_x(i) := 0;
 						in_y(i) := in_y(i)+1;
 					else
-						in_x(i) := in_x(i)+1;
-						if (in_y(i) mod 2)=0 and in_x(i)>=40 and in_x(i)<680 and (in_x(i) mod 2)=0 then
+						if in_y(i)>=32 and in_y(i)<544 and (in_y(i) mod 2)=0 and in_x(i)>=40 and in_x(i)<680 and (in_x(i) mod 2)=0 then
 							writecounter(i):=writecounter(i)+1;
 						end if;
+						in_x(i) := in_x(i)+1;
 					end if;				
 					inactivecounter(i) := 0;					
 				else
@@ -291,6 +300,7 @@ begin
 					end if;
 				end if;
 			end loop;			
+		DUMMY <= DE0;
 		end if;
 		
 		WADDRESS0 <= std_logic_vector(to_unsigned(writecounter(0), 12));
@@ -298,7 +308,6 @@ begin
 		WADDRESS2 <= std_logic_vector(to_unsigned(writecounter(2), 12));
 		RADDRESS <= std_logic_vector(to_unsigned(readcounter, 12));
 		
-		DUMMY <= '0';
 	end process;
 	
 	
@@ -414,19 +423,19 @@ begin
 	
     -- send EDID
 	process (SCL_DEGLITCH,SDA_DEGLITCH,OSC)
-	constant pixelclock:integer := 25350000/10000;
+	constant pixelclock:integer := 2700;
 	constant hvisible:integer := 720;
-	constant hfront:integer := 64;
+	constant hfront:integer := 12;
 	constant hsync:integer := 64;
-	constant hback:integer := 112;
+	constant hback:integer := 68;
 	constant hblanking:integer := hfront+hsync+hback;
 	constant hsize_mm:integer := 1080;
-	constant vvisible:integer := 512;
-	constant vfront:integer := 4;
-	constant vsync:integer := 4;
-	constant vback:integer := 8;
+	constant vvisible:integer := 576;
+	constant vfront:integer := 5;
+	constant vsync:integer := 5;
+	constant vback:integer := 39;
 	constant vblanking:integer := vfront+vsync+vback;
-	constant vsize_mm:integer := 768;
+	constant vsize_mm:integer := 864;
 	constant edid_without_sums:Tedid := (
 		16#00#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#ff#,16#00#,                                                                        -- standard header
 		16#0d#,16#f0#,16#01#,16#00#,16#01#,16#00#,16#00#,16#00#,16#0a#,16#22#,                                                          -- manufacturer info
@@ -457,6 +466,7 @@ begin
 		0,                                                                       -- 15
 		0,                                                                       -- 16
 		2#00011000#,                                                             -- 17
+		
 		16#00#,16#00#,16#00#,16#fc#,16#00#,16#4C#,16#45#,16#44#,16#4d#,16#41#,16#54#,16#52#,16#49#,16#58#,16#0a#,16#20#,16#20#,16#20#, -- monitor information
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
 		16#00#,16#00#,16#00#,16#10#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#,16#00#, -- dummy
@@ -511,7 +521,11 @@ begin
 					end if;
 				when ackaddr =>
 					if readmode then
-						readbuffer := std_logic_vector(to_unsigned(edid(index), 8));
+						if index>=128 then
+							readbuffer := "00000000";
+						else
+							readbuffer := std_logic_vector(to_unsigned(edid(index), 8));
+						end if;
 						out_sda := readbuffer(7);
 						readbuffer := readbuffer(6 downto 0) & '0';
 					end if;
