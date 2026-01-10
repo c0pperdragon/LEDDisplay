@@ -16,8 +16,8 @@ CoreRevision=5.8
 ModuleName=PLLHDMI
 SourceFormat=VHDL
 ParameterFileVersion=1.0
-Date=01/08/2026
-Time=16:20:54
+Date=01/10/2026
+Time=12:06:01
 
 [Parameters]
 Verilog=0

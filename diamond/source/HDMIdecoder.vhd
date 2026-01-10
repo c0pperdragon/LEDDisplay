@@ -48,11 +48,11 @@ function make_checksums (edid : in Tedid) return Tedid is
 -- PLL outputs 4 clocks with 45, 90, 135 phase shift
 component PLLHDMI is
     port (
-        CLKI: in  std_logic;    -- 25.35 MHz
-        CLKOP: out  std_logic;  -- 253.5 MHz 
-        CLKOS: out  std_logic;  -- 253.5 MHz, 45 degrees shifted
-        CLKOS2: out  std_logic; -- 253.5 MHz, 90 degrees shifted
-        CLKOS3: out  std_logic  -- 253.5 MHz, 135 degrees shifted
+        CLKI: in  std_logic;    -- 27.0 MHz
+        CLKOP: out  std_logic;  -- 270 MHz 
+        CLKOS: out  std_logic;  -- 270 MHz, 45 degrees shifted
+        CLKOS2: out  std_logic; -- 270 MHz, 90 degrees shifted
+        CLKOS3: out  std_logic  -- 270 MHz, 135 degrees shifted
 	);
 end component;
 
@@ -202,58 +202,57 @@ begin
 
 	-- orchestrate data transfer
 	process (C)	
-	subtype i13 is integer range 0 to 4095;
-	type i13a is array (0 to 2) of i13;
+	type i13a is array (0 to 2) of integer range 0 to 4095;
 	variable writecounter:i13a;
-	variable readcounter:i13;
 	variable inactivecounter:i13a;
 	variable in_x:i13a;
 	variable in_y:i13a;
+	variable readcounter:integer range 0 to 4095;
 	variable out_phase:integer range 0 to 3;
 	variable out_x:integer range 0 to 1023;
 	variable out_y:integer range 0 to 1023;
-	variable accu:integer range 0 to 32767 := 0;
-	constant accu_inc:integer := 8;
-	constant accu_dec:integer := 16875-accu_inc;
+	variable accu:integer range 0 to 2**20-1;
+	constant accu_inc:integer := 256;
+	constant accu_dec:integer := 540000;
 	variable tmpde:std_logic_vector(2 downto 0);
 	begin
 		if rising_edge(C) then
 			-- generate signals according to counters
 			if out_x<400 and (out_phase=1 or out_phase=2) then
---				CLK_BIT <= '1';
+				CLK_BIT <= '1';
 			else
---				CLK_BIT <= '0';
+				CLK_BIT <= '0';
 			end if;	
 			if out_x>=384 then
 				if out_y = 255 then
---					R_BIT <= "00";
---					G_BIT <= "00";
---					B_BIT <= "00";
+					R_BIT <= "00";
+					G_BIT <= "00";
+					B_BIT <= "00";
 				else
---					R_BIT <= "11";
---					G_BIT <= "11";
---					B_BIT <= "11";
+					R_BIT <= "11";
+					G_BIT <= "11";
+					B_BIT <= "11";
 				end if;
 			elsif out_phase=1 then
---				R_BIT <= RDATA(11 downto 10);
---				G_BIT <= RDATA(7 downto 6);
---				B_BIT <= RDATA(3 downto 2);
+				R_BIT <= RDATA(11 downto 10);
+				G_BIT <= RDATA(7 downto 6);
+				B_BIT <= RDATA(3 downto 2);
 			elsif out_phase=3 then
---				R_BIT <= RDATA(9 downto 8);
---				G_BIT <= RDATA(5 downto 4);
---				B_BIT <= RDATA(1 downto 0);
+				R_BIT <= RDATA(9 downto 8);
+				G_BIT <= RDATA(5 downto 4);
+				B_BIT <= RDATA(1 downto 0);
 			end if;		
 		
 			-- start output synchronized to the input channel 0
-			if in_x(0)=2 and in_y(0)=2 then
+			if in_x(0)=42 and in_y(0)=34 then
 				out_phase := 0;
 				out_x := 0;
 				out_y := 0;
 				accu := 0;
 				readcounter := 0;
 			-- do a bresenheim algorithm to get the trigger frequency of output lines as perfect as possible
-			elsif accu >= accu_dec then		
-				accu := accu - accu_dec;
+			elsif accu >= accu_dec-accu_inc then		
+				accu := accu - (accu_dec-accu_inc);
 				out_phase := 0;
 				out_x := 0;
 				out_y := out_y+1;	
@@ -300,7 +299,6 @@ begin
 					end if;
 				end if;
 			end loop;			
-		DUMMY <= DE0;
 		end if;
 		
 		WADDRESS0 <= std_logic_vector(to_unsigned(writecounter(0), 12));
@@ -308,91 +306,92 @@ begin
 		WADDRESS2 <= std_logic_vector(to_unsigned(writecounter(2), 12));
 		RADDRESS <= std_logic_vector(to_unsigned(readcounter, 12));
 		
+		DUMMY <= '0';
 	end process;
 	
-	
-	process (OSC)
-	variable phase : integer range 0 to 3 := 0;
-	variable x : integer range 0 to 1024 := 0;
-	variable y : integer range 0 to 255 := 0;
-	variable frame : integer range 0 to 255;
-	variable px : integer range 0 to 1024 := 0;
-	variable py : integer range 0 to 511 := 0;
-	variable rgb:std_logic_vector(11 downto 0);
-	begin
-		if rising_edge(OSC) then
-			-- generate picture
-			rgb := "000000000000";
-			if px<320 and py<256 then
-				if px<256 then
-					rgb(11 downto 8) := std_logic_vector(to_unsigned(px/16, 4));
-					rgb(7 downto 4)  := std_logic_vector(to_unsigned(py/16, 4));
-				else
-					rgb(11 downto 8) := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
-					rgb(7 downto 4)  := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
-					rgb(3 downto 0)  := std_logic_vector(to_unsigned( (px+frame)mod 16, 4));
-				end if;
-			end if;	
-			-- generate output signals
-			if x<384 then
-				if phase<=1 then
-					CLK_BIT <= '1';
-					R_BIT <= rgb(11 downto 10);
-					G_BIT <= rgb(7 downto 6);
-					B_BIT <= rgb(3 downto 2);
-				else 
-					CLK_BIT <= '0';
-					R_BIT <= rgb(9 downto 8);
-					G_BIT <= rgb(5 downto 4);
-					B_BIT <= rgb(1 downto 0);
-				end if;			
-			else
-				if x<400 and phase<=1 then
-					CLK_BIT <= '1';
-				else
-					CLK_BIT <= '0';
-				end if;
-				if y=255 then
-					R_BIT <= "00";
-					G_BIT <= "00";
-					B_BIT <= "00";
-				else
-					R_BIT <= "11";
-					G_BIT <= "11";
-					B_BIT <= "11";
-				end if;
-			end if;
-			-- progress counters
-			if phase<3 then
-				phase:=phase+1;
-			else
-				phase := 0;
+	---- generate test image for the Pico
+	--process (OSC)
+	--variable phase : integer range 0 to 3 := 0;
+	--variable x : integer range 0 to 1024 := 0;
+	--variable y : integer range 0 to 255 := 0;
+	--variable frame : integer range 0 to 255;
+	--variable px : integer range 0 to 1024 := 0;
+	--variable py : integer range 0 to 511 := 0;
+	--variable rgb:std_logic_vector(11 downto 0);
+	--begin
+		--if rising_edge(OSC) then
+			---- generate picture
+			--rgb := "000000000000";
+			--if px<320 and py<256 then
+				--if px<256 then
+					--rgb(11 downto 8) := std_logic_vector(to_unsigned(px/16, 4));
+					--rgb(7 downto 4)  := std_logic_vector(to_unsigned(py/16, 4));
+				--else
+					--rgb(11 downto 8) := std_logic_vector(to_unsigned( (px+py/4+frame)mod 16, 4));
+					--rgb(7 downto 4)  := std_logic_vector(to_unsigned( (px+py/4+frame)mod 16, 4));
+					--rgb(3 downto 0)  := std_logic_vector(to_unsigned( (px+py/4+frame)mod 16, 4));
+				--end if;
+			--end if;	
+			---- generate output signals
+			--if x<384 then
+				--if phase<=1 then
+					--CLK_BIT <= '1';
+					--R_BIT <= rgb(11 downto 10);
+					--G_BIT <= rgb(7 downto 6);
+					--B_BIT <= rgb(3 downto 2);
+				--else 
+					--CLK_BIT <= '0';
+					--R_BIT <= rgb(9 downto 8);
+					--G_BIT <= rgb(5 downto 4);
+					--B_BIT <= rgb(1 downto 0);
+				--end if;			
+			--else
+				--if x<400 and phase<=1 then
+					--CLK_BIT <= '1';
+				--else
+					--CLK_BIT <= '0';
+				--end if;
+				--if y=255 then
+					--R_BIT <= "00";
+					--G_BIT <= "00";
+					--B_BIT <= "00";
+				--else
+					--R_BIT <= "11";
+					--G_BIT <= "11";
+					--B_BIT <= "11";
+				--end if;
+			--end if;
+			---- progress counters
+			--if phase<3 then
+				--phase:=phase+1;
+			--else
+				--phase := 0;
 				
-				if x<384 then
-					if px<320-1 then
-						px := px+1;
-					else
-						px := 0;
-						py := py+1;
-					end if;
-				end if;
+				--if x<384 then
+					--if px<320-1 then
+						--px := px+1;
+					--else
+						--px := 0;
+						--py := py+1;
+					--end if;
+				--end if;
 				
-				if x<528-1 then
-					x := x+1;
-				else 
-					x := 0;
-					if y<256-1 then
-						y := y+1;
-					else 
-						y := 0;
-						frame := (frame+1) mod 256;						
-						px := 0;
-						py := 0;
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
+				--if x<528-1 then
+					--x := x+1;
+				--else 
+					--x := 0;
+					--if y<256-1 then
+						--y := y+1;
+					--else 
+						--y := 0;
+						--frame := (frame+1) mod 256;						
+						--px := 0;
+						--py := 0;
+					--end if;
+				--end if;
+			--end if;
+		--end if;
+	--end process;
 
 
 

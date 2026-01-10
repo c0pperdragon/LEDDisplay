@@ -11,6 +11,7 @@
 #include "outshifter.pio.h"
 #include "lightswitcher.pio.h"
 #include "pixelreader.pio.h"
+#include "delayedinterrupt.pio.h"
 #include "image.h"
 
 #define PIN_CLK 0
@@ -29,103 +30,19 @@ PIO pioout;       //pioblock for outputshifter
 int out_dma;      //dma for outputshifter
 PIO pioin;        //pioblock for data reader
 int in_dma;      //dma for pixel data receiver
+int trigger_dma;  // dma just for tiggering delayed interrupt
 
-int top = 0;                // first line of whole screen to be shown by this program
+int top;                // first line of whole screen to be shown by this program
 
-int currentTotalLine = 0;   // line number of the original whole screen
+int currentTotalLine;   // line number of the original whole screen
 uint32_t screenbuffer[SCREENBUFFER_LEN];  // screen buffer to drive output 
-int currentreadbuffer = 0;
-uint32_t readlinebuffer[60*(384/2)];   // hold 60 blocks of input data, which is enough for 72 lines
+int currentreadbuffer;
+uint32_t readlinebuffer[60*(384/2)];   // hold 60 blocks of input data, which is enough for 72 lines on screen
+
+int segment;  // currently processed display segment (a 32th of the whole display)
 int row_latch; // what is currently latched in the external counter
-
-// Use the CPU to rearrange the incomming data from a pixel-by pixel format to the
-// output buffer where all the bits for one LED segment (0 - 7) are grouped together 
-// The input format is 16 bits for each pixel, with the left pixel of each pair in the higher 16 bits of each word.
-
-void distributeLineData(int line, uint32_t* data)
-{
-  int shift = 9 - (line/32) * 3;
-  uint32_t use_mask = 0x00070007u<<shift;
-  uint32_t cut_mask = ~use_mask;
-  uint32_t* outbuf3 = screenbuffer + (line%32) * (SCREENBUFFER_LEN/32);
-  uint32_t* outbuf2 = outbuf3 + 160;
-  uint32_t* outbuf1 = outbuf2 + 160;
-  uint32_t* outbuf0 = outbuf1 + 160;
-  for (int i=0; i<160; i++)
-  {                        
-    uint32_t d = *(data++);
-    uint32_t x,y; 
-    x = (*outbuf3) & cut_mask;        // bit 3
-    y = ((d>>9) << shift) & use_mask;
-    *outbuf3 = x | y;
-    outbuf3++;
-    x = (*outbuf2) & cut_mask;        // bit 2
-    y = ((d>>6) << shift) & use_mask;
-    *outbuf2 = x | y;
-    outbuf2++;
-    x = (*outbuf1) & cut_mask;        // bit 1
-    y = ((d>>3) << shift) & use_mask;
-    *outbuf1 = x | y;
-    outbuf1++;
-    x = (*outbuf0) & cut_mask;        // bit 0
-    y = ((d) << shift) & use_mask;
-    *outbuf0 = x | y;
-    outbuf0++;
-  } 
-}
-
-// extract demo picture into screen buffer
-void drawDemoImage() 
-{
-  int imgoffs=320*top;
-
-  for (int y=0; y<128;y++) 
-  {
-    uint32_t d = 0;
-    for (int x=0; x<320; x++) 
-    {
-      uint32_t rgb = image[imgoffs++];
-      d = d | ( ((rgb>>20)&1) << 0);    // R0
-      d = d | ( ((rgb>>12)&1) << 1);    // G0
-      d = d | ( ((rgb>>4 )&1) << 2);    // B0
-      d = d | ( ((rgb>>21)&1) << 3);    // R1
-      d = d | ( ((rgb>>13)&1) << 4);    // G1
-      d = d | ( ((rgb>>5 )&1) << 5);    // B1
-      d = d | ( ((rgb>>22)&1) << 6);    // R2
-      d = d | ( ((rgb>>14)&1) << 7);    // G2
-      d = d | ( ((rgb>>6 )&1) << 8);    // B2
-      d = d | ( ((rgb>>23)&1) << 9);    // R3
-      d = d | ( ((rgb>>15)&1) << 10);   // G3
-      d = d | ( ((rgb>>7 )&1) << 11);   // B3
-      if ((x%2)==0) { d = d << 16; }
-      else 
-      {
-        readlinebuffer[x/2]=d;
-        d=0;
-      }
-    }
-    distributeLineData(y, readlinebuffer);
-  }
-}
-
-void updateRowLatch(int row)
-{
-  int i;
-  for (i=0; (i<6) & (row_latch != row); i++)
-  {
-    if (row_latch<16) 
-    {
-        digitalWrite(PIN_E, HIGH);
-        row_latch = ((row_latch+1) & 15) + 16;
-    }
-    else
-    {
-        digitalWrite(PIN_E, LOW);
-        row_latch = row_latch-16;
-    }
-  }
-}
-
+volatile int requestedLineToProcess;
+int warmup;
 
 void setup() 
 {
@@ -142,6 +59,13 @@ void setup()
   pinMode(PIN_SEGMENTSELECTOR, INPUT_PULLUP);
   top = digitalRead(PIN_SEGMENTSELECTOR) ? 0 : 128;
 
+  // startup values for various counters
+  memset(screenbuffer, 0, SCREENBUFFER_LEN*4);
+  currentTotalLine = 0;
+  currentreadbuffer = 0;
+  segment = 0;
+  requestedLineToProcess = -1;
+
   // reset the row counter latch to 0
   digitalWrite(PIN_E, LOW);
   digitalWrite(PIN_OE, LOW);
@@ -149,12 +73,6 @@ void setup()
   digitalWrite(PIN_OE, HIGH);
   digitalWrite(PIN_E, LOW);
   row_latch = 0;
-
-  // startup values for various counters
-  memset(screenbuffer, 0, SCREENBUFFER_LEN*4);
-//  drawDemoImage();
-  currentTotalLine = 0;
-  currentreadbuffer = 0;
 
   //Setup pio block and state machines for driving the LEDs
   pioout = pio0;
@@ -209,10 +127,15 @@ void setup()
   }
 
   pioin = pio1;  
-  // set up interrupt for incomming scanlines of data
+  // set up CPU interrupt for incomming scanlines of data
   irq_set_exclusive_handler(PIO_IRQ_NUM(pioin, 0), lineFinishInterrupt);
   irq_set_enabled(PIO_IRQ_NUM(pioin, 0), true);
   pio_set_irq0_source_enabled(pioin, pis_interrupt0, true);
+  // set up CPU interrupt for delayed setting of the row latch
+  irq_set_exclusive_handler(PIO_IRQ_NUM(pioin, 1), updateRowLatchInterrupt);
+  irq_set_enabled(PIO_IRQ_NUM(pioin, 1), true);
+  pio_set_irq1_source_enabled(pioin, pis_interrupt1, true);
+
   //Setup dma channel for receiving bit data
   in_dma = dma_claim_unused_channel(true);
   {
@@ -231,7 +154,25 @@ void setup()
       true                 // Start immediately, waiting for data
     );
   }
-  //Setup pio block and state machines for reading input data
+  //Setup dma channel for triggering delayed interrupt
+  trigger_dma = dma_claim_unused_channel(true);
+  {
+    dma_channel_config c = dma_channel_get_default_config(trigger_dma);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, DREQ_PIO1_TX1);
+    dma_channel_configure
+    (
+      trigger_dma,
+      &c,
+      &pioin->txf[1],     // Write address (only need to set this once)
+      NULL,                // Don't provide a read address yet
+      1,                   // just use 1 int for signaling
+      false                // Don't start yet
+    );
+  }
+  //Set up pio block and state machines for reading input data and creating a delayed interrupt
   for (int i=0;i<7;i++) { pio_gpio_init(pioin, PIN_DATA+i); }  
   {
     int sm = pio_claim_unused_sm(pioin, true);
@@ -246,17 +187,29 @@ void setup()
     pio_sm_init(pioin, sm, o, &c);
 	  pio_sm_set_enabled(pioin, sm, true);
   }
+  {
+    int sm = pio_claim_unused_sm(pioin, true);
+    int o = pio_add_program(pioin, &delayedinterrupt_program);
+    pio_sm_config c = delayedinterrupt_program_get_default_config(o);
+    sm_config_set_clkdiv(&c, 1.0);
+    sm_config_set_in_shift(&c, false, false, 32);
+    pio_sm_init(pioin, sm, o, &c);
+	  pio_sm_set_enabled(pioin, sm, true);
+  }
 }
 
 void lineFinishInterrupt()
 { 
-    // which line was triggered by FPGA recently
-    int prevTotalLine=currentTotalLine;
     // which rows to show next to have very small delay, but still avoid access conflict
-    int segment = ((currentTotalLine+28)%32);
+    segment = ((currentTotalLine+28)%32);
 
-    // Start dma to output the pixels of all the rows of current segment 
+    // Start dma to output the pixels of all the rows of current segment (row latch will be set by delayed interrupt)
     dma_channel_set_read_addr(out_dma, screenbuffer+(SCREENBUFFER_LEN/32)*segment, true);
+    // Write one int to the trigger DMA to get a later interrupt
+    dma_channel_set_read_addr(trigger_dma, screenbuffer, true);
+
+    // request that the main loop processed the line that was just received
+    requestedLineToProcess = currentTotalLine;
 
     // check if this was the last row of the whole screen
     if (digitalRead(PIN_DATA)==LOW)
@@ -270,24 +223,87 @@ void lineFinishInterrupt()
       currentTotalLine++;
     }
 
-    // already prepare dma to read the next data block
+    // prepare dma to read the next data block
     dma_channel_set_write_addr(in_dma, readlinebuffer+(currentreadbuffer*(384/2)), true);
+}
 
-    // Wait until the lowest bit of the previous line was surely completely shown (with OE low)
-    busy_wait_us_32(3);
-
-    // progress row selectors before most significant bit of this row becomes visible
-    updateRowLatch(segment);
-
-    // decode the previously triggered line (data block alignment is different to line alignment)
-    if (prevTotalLine>=top && prevTotalLine<top+128)
+void updateRowLatchInterrupt()
+{
+  static int warmup = 0;
+  if (warmup<100)
+  {
+    warmup++;
+    return;
+  }
+  
+  int i;
+//  digitalWrite(PIN_DEBUG, HIGH);
+  for (i=0; (i<6) & (row_latch != segment); i++)
+  {
+    if (row_latch<16) 
     {
-      distributeLineData(prevTotalLine-top, readlinebuffer+(320/2)*(prevTotalLine%72) );
+        digitalWrite(PIN_E, HIGH);
+        row_latch = ((row_latch+1) & 15) + 16;
     }
+    else
+    {
+        digitalWrite(PIN_E, LOW);
+        row_latch = row_latch-16;
+    }
+  }
+//  digitalWrite(PIN_DEBUG, LOW);
 }
 
 
+// Use the CPU to rearrange the incomming data from a pixel-by pixel format to the
+// output buffer where all the bits for one LED segment (0 - 7) are grouped together 
+// The input format is 16 bits for each pixel, with the left pixel of each pair in the higher 16 bits of each word.
+
+void distributeLineData(int line, uint32_t* data)
+{
+  int shift = 9 - (line/32) * 3;
+  uint32_t use_mask = 0x00070007u<<shift;
+  uint32_t cut_mask = ~use_mask;
+  uint32_t* outbuf3 = screenbuffer + (line%32) * (SCREENBUFFER_LEN/32);
+  uint32_t* outbuf2 = outbuf3 + 160;
+  uint32_t* outbuf1 = outbuf2 + 160;
+  uint32_t* outbuf0 = outbuf1 + 160;
+  for (int i=0; i<160; i++)
+  {                        
+    uint32_t d = *(data++);
+    uint32_t x,y; 
+    x = (*outbuf3) & cut_mask;        // bit 3
+    y = ((d>>9) << shift) & use_mask;
+    *outbuf3 = x | y;
+    outbuf3++;
+    x = (*outbuf2) & cut_mask;        // bit 2
+    y = ((d>>6) << shift) & use_mask;
+    *outbuf2 = x | y;
+    outbuf2++;
+    x = (*outbuf1) & cut_mask;        // bit 1
+    y = ((d>>3) << shift) & use_mask;
+    *outbuf1 = x | y;
+    outbuf1++;
+    x = (*outbuf0) & cut_mask;        // bit 0
+    y = ((d) << shift) & use_mask;
+    *outbuf0 = x | y;
+    outbuf0++;
+  } 
+}
+
+// asynchronious processing that converts the input buffer data to the screen buffer format when needed
 void loop() 
 {  
+  int p = -1;
+  for (;;)
+  {
+    int l = requestedLineToProcess;   // check if some work is scheduled
+    if (l==p) continue;               // nothing to do yet
+    if (l>=top && l<top+128)          // only process lines that are actually shown by this controller
+    {
+      distributeLineData(l-top, readlinebuffer+(320/2)*(l%72) );
+    }
+    p=l;
+  }
 }
 

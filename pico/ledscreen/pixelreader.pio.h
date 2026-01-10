@@ -13,7 +13,7 @@
 // ----------- //
 
 #define pixelreader_wrap_target 0
-#define pixelreader_wrap 23
+#define pixelreader_wrap 22
 
 static const uint16_t pixelreader_program_instructions[] = {
             //     .wrap_target
@@ -27,27 +27,26 @@ static const uint16_t pixelreader_program_instructions[] = {
     0x00c5, //  7: jmp    pin, 5                     
     0x00c5, //  8: jmp    pin, 5                     
     0x00c5, //  9: jmp    pin, 5                     
-    0x00c5, // 10: jmp    pin, 5                     
-    0x0046, // 11: jmp    x--, 6                     
-    0xa0c1, // 12: mov    isr, x                     
-    0x20a6, // 13: wait   1 pin, 6                   
-    0x8060, // 14: push   iffull block               
-    0x4964, // 15: in     null, 4                [9] 
-    0x4006, // 16: in     pins, 6                    
-    0x2026, // 17: wait   0 pin, 6                   
-    0xaa42, // 18: nop                           [10]
-    0x4006, // 19: in     pins, 6                    
-    0x008d, // 20: jmp    y--, 13                    
-    0x8060, // 21: push   iffull block               
-    0xc500, // 22: irq    nowait 0               [5] 
-    0xc040, // 23: irq    clear 0                    
+    0x0046, // 10: jmp    x--, 6                     
+    0xa0c1, // 11: mov    isr, x                     
+    0x20a6, // 12: wait   1 pin, 6                   
+    0x8060, // 13: push   iffull block               
+    0x4964, // 14: in     null, 4                [9] 
+    0x4006, // 15: in     pins, 6                    
+    0x2026, // 16: wait   0 pin, 6                   
+    0xaa42, // 17: nop                           [10]
+    0x4006, // 18: in     pins, 6                    
+    0x008c, // 19: jmp    y--, 12                    
+    0x8060, // 20: push   iffull block               
+    0xc500, // 21: irq    nowait 0               [5] 
+    0xc040, // 22: irq    clear 0                    
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program pixelreader_program = {
     .instructions = pixelreader_program_instructions,
-    .length = 24,
+    .length = 23,
     .origin = -1,
 };
 

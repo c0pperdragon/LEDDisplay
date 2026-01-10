@@ -2,7 +2,7 @@
 -- Module  Version: 5.7
 --C:\lscc\diamond\3.14\ispfpga\bin\nt64\scuba.exe -w -n PLLHDMI -lang vhdl -synth lse -arch xo2c00 -type pll -fin 27 -fclkop 270 -fclkop_tol 0.0 -fclkos 270 -fclkos_tol 0.0 -fclkos2 270 -fclkos2_tol 0.0 -fclkos3 270 -fclkos3_tol 0.0 -trimp 0 -phasep 0 -trimp_r -trims 0 -phases 45 -trims_r -phases2 90 -phases3 135 -phase_cntl STATIC -fb_mode 1 
 
--- Thu Jan 08 16:20:54 2026
+-- Sat Jan 10 12:06:01 2026
 
 library IEEE;
 use IEEE.std_logic_1164.all;

@@ -1,0 +1,15 @@
+; uses a DMA channel just to be notified by the CPU that after some
+; wait, it should in turn send an interrupt to the CPU
+
+.program delayedinterrupt
+.wrap_target
+	pull block                 ; just to allow CPU to signal us
+	set y 1
+loop1:
+    set x 31   
+loop2:
+	jmp x-- loop2          [31]
+	jmp y-- loop1          [31]
+	irq nowait 1           [7] ; notify CPU that the selector latch should be changed
+	irq clear 1	
+.wrap

@@ -26,7 +26,6 @@ waitforidle:                   ; wait until clock is low for at least 1us
 	jmp pin resetidlecounter
 	jmp pin resetidlecounter
 	jmp pin resetidlecounter
-	jmp pin resetidlecounter
 	jmp x-- waitforidle
 	
 	mov isr x                  ; clear shift register in preparation to read pixels
