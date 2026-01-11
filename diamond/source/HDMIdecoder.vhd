@@ -76,7 +76,7 @@ component StreamDecoder is
 		STREAM     : in std_logic;  
 		
 		DE         : out std_logic;
-		DATA       : out std_logic_vector(3 downto 0);
+		DATA       : out std_logic_vector(7 downto 0);
 		SYNCED     : out std_logic
 	);	
 end component;
@@ -109,9 +109,9 @@ signal BITCLOCK3:std_logic;
 signal DE0:std_logic;
 signal DE1:std_logic;
 signal DE2:std_logic;
-signal DATA0:std_logic_vector(3 downto 0);
-signal DATA1:std_logic_vector(3 downto 0);
-signal DATA2:std_logic_vector(3 downto 0);
+signal DATA0:std_logic_vector(7 downto 0);
+signal DATA1:std_logic_vector(7 downto 0);
+signal DATA2:std_logic_vector(7 downto 0);
 signal WADDRESS0:std_logic_vector(11 downto 0);
 signal WADDRESS1:std_logic_vector(11 downto 0);
 signal WADDRESS2:std_logic_vector(11 downto 0);
@@ -170,7 +170,7 @@ begin
 	);
 	RAM0: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
 		port map (
-			DATA0, 
+			DATA0(7 downto 4), 
 			RADDRESS,
 			WADDRESS0,
 			'1',
@@ -180,7 +180,7 @@ begin
 		);
 	RAM1: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
 		port map (
-			DATA1, 
+			DATA1(7 downto 4), 
 			RADDRESS,
 			WADDRESS1,
 			'1',
@@ -190,7 +190,7 @@ begin
 		);
 	RAM2: ram_dual generic map(data_width => 4, addr_width => 12, numwords => 4096)
 		port map (
-			DATA2, 
+			DATA2(7 downto 4), 
 			RADDRESS,
 			WADDRESS2,
 			'1',
@@ -218,20 +218,22 @@ begin
 	begin
 		if rising_edge(C) then
 			-- generate signals according to counters
-			if out_x<400 and (out_phase=1 or out_phase=2) then
+			if out_x>=0 and out_x<400 and (out_phase=1 or out_phase=2) then
 				CLK_BIT <= '1';
 			else
 				CLK_BIT <= '0';
 			end if;	
 			if out_x>=384 then
-				if out_y = 255 then
-					R_BIT <= "00";
-					G_BIT <= "00";
-					B_BIT <= "00";
-				else
-					R_BIT <= "11";
-					G_BIT <= "11";
-					B_BIT <= "11";
+				if out_phase=1 then
+					if out_y = 255 then
+						R_BIT <= "00";
+						G_BIT <= "00";
+						B_BIT <= "00";
+					else
+						R_BIT <= "11";
+						G_BIT <= "11";
+						B_BIT <= "11";
+					end if;
 				end if;
 			elsif out_phase=1 then
 				R_BIT <= RDATA(11 downto 10);

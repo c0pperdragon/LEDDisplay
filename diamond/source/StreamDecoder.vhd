@@ -15,7 +15,7 @@ entity StreamDecoder is
 		STREAM     : in std_logic;  
 		
 		DE         : out std_logic;
-		DATA       : out std_logic_vector(3 downto 0);
+		DATA       : out std_logic_vector(7 downto 0);
 		SYNCED     : out std_logic
 	);	
 end entity;
@@ -75,19 +75,19 @@ begin
 			if bits="1101010100" or bits="0010101011" or bits="0101010100" or bits="1010101011" then
 				de_out := '0';
 				DE <= '0';
+				DATA <= "00000000";
 			else
 				de_out := '1';
 				DE <= '1';
-				if bits(8)='1' then
-					DATA(3) <= bits(7) xor bits(6);
-					DATA(2) <= bits(6) xor bits(5);
-					DATA(1) <= bits(5) xor bits(4);
-					DATA(0) <= bits(4) xor bits(3);
+				if bits(9)='1' then
+					DATA(0) <= not bits(0);
 				else
-					DATA(3) <= not (bits(7) xor bits(6));
-					DATA(2) <= not (bits(6) xor bits(5));
-					DATA(1) <= not (bits(5) xor bits(4));
-					DATA(0) <= not (bits(4) xor bits(3));					
+					DATA(0) <= bits(0);
+				end if;
+				if bits(8)='1' then
+					DATA(7 downto 1) <= bits(7 downto 1) xor bits(6 downto 0);
+				else
+					DATA(7 downto 1) <= not (bits(7 downto 1) xor bits(6 downto 0));
 				end if;
 			end if;
 			-- select bits according to coarse phase
