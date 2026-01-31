@@ -16,9 +16,9 @@
 #define lightswitcher_wrap 15
 
 static const uint16_t lightswitcher_program_instructions[] = {
-    0xf02d, //  0: set    x, 13           side 1     
+    0xf026, //  0: set    x, 6            side 1     
     0xb0c1, //  1: mov    isr, x          side 1     
-    0xf026, //  2: set    x, 6            side 1     
+    0xf024, //  2: set    x, 4            side 1     
     0x5024, //  3: in     x, 4            side 1     
             //     .wrap_target
     0xb026, //  4: mov    x, isr          side 1     
